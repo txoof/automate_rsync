@@ -13,12 +13,194 @@ import re
 # handle commandline options
 import sys, getopt
 
-version='automate rsync over ssh: version 0.1'
+version='automate rsync over ssh: version 0.2'
+
+
+# locate executables in the path
+# Thanks to http://stackoverflow.com/users/20840/jay
+# http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python/377028#377028
+def which(program):
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+# create a config file if none is found
+
+def checkConfig(baseConfig):
+  if not os.path.isfile(baseConfig['configFile']):
+    print 'No configuration file was found at: ', baseConfig['configFile']
+    print 'Would you like to create one?'
+    response=raw_input('y/N: ')
+    if response=='y' or response=='Y':
+      try:
+        open(baseConfig['configFile'], 'w').write(str(''))
+      except Exception, e:
+        print 'Could not write config file:', e
+        return(False)
+    else:
+      print 'Cannot continue without a configuration file. Exiting.'
+      exit(0)
+  
+  config=ConfigParser.RawConfigParser()
+  try:
+    config.readfp(open(baseConfig['configFile']))
+  except Exception, e:
+    print 'Failed to load configuration file: ', baseConfig['configFile']
+    print 'Error: ', e
+    return(False)
+
+  #check for required sections
+  configChanges=False
+  requiredSections=['%BaseConfig', '%sshOptions']
+
+  for i in requiredSections:
+    if not config.has_section(i):
+      config.add_section(i)
+      configChanges=True
+
+  #Check required sections for options
+  # BaseConfig
+  if not config.has_option('%BaseConfig', 'rsyncBin'):
+    print '\nWhich rsync binary would you like to use for backups?'
+    print 'Default: ', which('rsync')
+    response=raw_input('full path to rsync binary or press ENTER for default: ')
+    if len(response) > 0:
+      response=which('rsync')
+    else:
+      response=which('rsync')
+    config.set('%BaseConfig', 'rsyncBin', response)
+    configChanges=True
+
+  if not config.has_option('%BaseConfig', 'rsyncOptions'):
+    print '\nWhat global rsync options would you like to use?'
+    print 'Typical options are: -avzh'
+    print 'See the rsync man page for more information.'
+    response=raw_input('rsync options: ')
+    if len(response) > 0:
+      config.set('%BaseConfig', 'rsyncOptions', response)
+      configChanges=True
+
+  if not config.has_option('%BaseConfig', 'deleteOptions'):
+    print '\nWhat delete options would you like to use?'
+    print 'For backups typical options are: --delete-excluded'
+    print 'See the rsync man page for more information.'
+    response=raw_input('delete options: ')
+    config.set('%BaseConfig', 'deleteOptions', response)
+    configChanges=True
+
+  if not config.has_option('%sshOptions', 'extraSSH'):
+    print '\nWhat additional ssh options would you like to use with rsync?'
+    print 'All extra options need to be preceded with "-o"'
+    print 'Please see the rsync and ssh_config pages for more informaiton.'
+    print 'To force rsync and ssh to use ONLY a specified SSH key use: -o IdentitiesOnly=yes'
+    response=raw_input('extraSSH options: ')
+    config.set('%sshOptions', 'extraSSH', response)
+    configChanges=True
+
+  if configChanges:
+    try:
+      with open(baseConfig['configFile'], 'wb') as configfile:
+        config.write(configfile)
+    except Exception, e:
+      print 'Failed to write to', baseConfig['configFile']
+      print 'Error:', e
+      return(False)
+
+  return(True)
+
+def jobAdd(baseConfig):
+  configChanges=False
+  print 'Would you like to interactively add a job?'
+  response=raw_input('Y/n: ')
+  if not (response=='y' or response=='Y' or response==''):
+    print 'Exiting. Please manually add at least one job to', baseConfig['configFile']
+    exit(0)
+    
+  if not os.path.isfile(baseConfig['configFile']):
+    print 'No configuration file was found at: ', baseConfig['configFile']
+    exit(1)
+  
+  config=ConfigParser.RawConfigParser()
+  try:
+    config.readfp(open(baseConfig['configFile']))
+  except Exception, e:
+    print 'Failed to load configuration file: ', baseConfig['configFile']
+    print 'Error: ', e
+    return(False)
+  
+  print '\nPlease give this job a descriptive name such as "Remote Host - LocalDirectory"'
+  jobName=raw_input('jobName: ')
+  configChanges=True
+  config.add_section(jobName)
+
+  print '\nWhat is the *remote* username to use?'
+  userName=raw_input('user: ')
+  config.set(jobName, 'user', userName)
+
+  print '\nWhat is the hostname or IP address of the remote rsync host?'
+  server=raw_input('server: ')
+  config.set(jobName, 'server', server)
+
+  print '\nWhat is the full path to the ssh key should be used with this server?'
+  print 'If no key is to be used or only one key per server is used this can be blank'
+  print 'If a specific key is used please set extraSSH=-o IdentitiesOnly=yes'
+  sshKey=raw_input('sshKey: ')
+  config.set(jobName, 'sshKey', sshKey)
+
+  print '\nWhat is the full local path to be backedup?'
+  localPath=raw_input('localPath: ')
+  config.set(jobName, 'localPath', localPath)
+
+  print '\nWhat is the full remote path?'
+  print 'If you you are using restricted rsync this path should be relative to the restricted path'
+  print 'For more information about securing passwordless rsync jobs with rrsync please see'
+  print 'https://ftp.samba.org/pub/unpacked/rsync/support/rrsync'
+  remotePath=raw_input('remotePath: ')
+  config.set(jobName, 'remotePath', remotePath)
+
+  print '\nWhat should be excluded?'
+  print 'Please see the rsync man page for more information on regular expressions and exclusions'
+  print 'Format: "/path/to/Dir1", "*Virtual.Machines", "*dump", "\.swp"'
+  exclude=raw_input('exclude: ')
+  config.set(jobName, 'exclude', exclude)
+
+
+  
+  if configChanges:
+    try:
+      with open(baseConfig['configFile'], 'wb') as configfile:
+        config.write(configfile)
+    except Exception, e:
+      print 'Failed to write to', baseConfig['configFile']
+      print 'Error:', e
+      return(False)
+
+  #add another job
+  jobAdd(baseConfig)
+  
 
 def setBaseConfig(baseConfig):
   config=ConfigParser.RawConfigParser(allow_no_value=True)
   #baseConfig={}
   #baseConfig['configFile']=configFile
+
+  # check for config file or create one with the user
+  if not checkConfig(baseConfig):
+    print 'Error in configuraiton file:', baseConfig['configFile']
+    exit(1)
+
   configFile=baseConfig['configFile']
   try:
     config.readfp(open(configFile))
@@ -87,8 +269,8 @@ def getRsyncJobs(baseConfig):
   for i in config.sections():
 
     #Configuration sections begin with a '%'; job sections can be any string
-    #FIXME - add a '#' option for disabling jobs.  Hack is to add % to job name
-    if not '%' in i:
+    # Literal '#' are treated as comments and jobs that contain a '#' are skipped
+    if not ('%' in i or '#' in i):
       if baseConfig['talk'] > 0:
         print 'found job: ', i
       excludeList=[]
@@ -99,7 +281,7 @@ def getRsyncJobs(baseConfig):
       localPath=''
       remotePath=''
       for j in config.options(i):
-      #pull out exclude items (delimited ONLY by \'\ - single quotes)
+      #pull out exclude items 
         try:
           rawExclude=config.get(i, 'exclude')
         except Exception, e:
@@ -123,13 +305,16 @@ def getRsyncJobs(baseConfig):
         remotePath=config.get(i, 'remotePath')
       except Exception, e:
         print 'Fatal Error: ', e
-        exit(2)
+        exit(1)
       
 
       jobCmd=rsyncCmd+"-i "+sshKey+"' "+excludeString+' '+localPath+' '+user+'@'+server+':'+remotePath
 
       rsyncJobs.append(jobCmd)  
-      
+     
+  if len(rsyncJobs) < 1:
+    print 'No rsync jobs found.  Please add a job to', baseConfig['configFile']
+    jobAdd(baseConfig)
   return(rsyncJobs)
 
 
