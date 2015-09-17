@@ -323,7 +323,7 @@ def main():
   # add option to specify configuration file from command line
   
   baseConfig={}
-
+  interactiveAdd=False
 
   argv=sys.argv[1:]
   try:
