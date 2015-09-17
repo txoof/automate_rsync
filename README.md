@@ -11,6 +11,9 @@ Quick start (tl;dr):
 
   $ ./automate_rsync
 
+
+
+
 This document assumes a basic understanding of SSH and the ability to connect to 
 a remote host using SSH.
 
@@ -71,6 +74,7 @@ Configuring rsync and ssh
       +-----------------+
 
      2) Install the public key on the DestinationServer
+
         * Transmit the public key to the DestiationServer:
       
           [LocalHost]$ sftp user@DestiationHost
