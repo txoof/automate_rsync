@@ -323,14 +323,16 @@ def main():
   
   baseConfig={}
 
+
   argv=sys.argv[1:]
   try:
     opts, args = getopt.getopt(argv, 'vqVc:')
-  except getopt.GetOptError:
+  except getopt.GetoptError:
     if '-c' in argv:
       print 'Error: no alternative configuration file specified.'
       print 'Default configuration file is ~/.automate_rsyncrc'
       print 'usage: ', sys.argv[0], '-c <configuration file>'
+      exit(0)
     else:
       print 'usage:'
       print '-q       quiet (note: this only effects the verbosity of this script)'
