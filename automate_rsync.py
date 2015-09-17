@@ -125,8 +125,9 @@ def jobAdd(baseConfig):
   print 'Would you like to interactively add a job?'
   response=raw_input('Y/n: ')
   if not (response=='y' or response=='Y' or response==''):
-    print 'Exiting. Please manually add at least one job to', baseConfig['configFile']
-    exit(0)
+    #print 'Exiting. Please manually add at least one job to', baseConfig['configFile']
+    return(True)
+    #exit(0)
     
   if not os.path.isfile(baseConfig['configFile']):
     print 'No configuration file was found at: ', baseConfig['configFile']
@@ -326,7 +327,7 @@ def main():
 
   argv=sys.argv[1:]
   try:
-    opts, args = getopt.getopt(argv, 'vqVc:')
+    opts, args = getopt.getopt(argv, 'vqVIc:')
   except getopt.GetoptError:
     if '-c' in argv:
       print 'Error: no alternative configuration file specified.'
@@ -335,14 +336,19 @@ def main():
       exit(0)
     else:
       print 'usage:'
+      print '-c <path to configuration file>'
+      print '-I       interactively add an rsync job'
       print '-q       quiet (note: this only effects the verbosity of this script)'
       print '-v       verbose'
       print '-V       Version: ', version
-      exit(2)
+      exit(0)
 
   for opt, arg in opts:
     if opt=='-c':
       baseConfig['configFile']=arg
+
+    if opt=='-I':
+      interactiveAdd=True
 
     if opt=='-q':
       baseConfig['talk']=0
@@ -360,10 +366,12 @@ def main():
   if not 'configFile' in baseConfig:
     baseConfig['configFile']=os.path.expanduser('~/.automate_rsyncrc')
 
+
   #setup basic configuration for how rsync should act
   baseConfig=setBaseConfig(baseConfig)
 
-
+  if interactiveAdd:
+    jobAdd(baseConfig)
 
   rsyncJobs=getRsyncJobs(baseConfig)
 
