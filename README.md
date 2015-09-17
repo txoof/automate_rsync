@@ -1,6 +1,10 @@
 # automate_rsync
 Configure rsync once, add multiple jobs with simple headings
 
+Released under GPL V3.0
+
+Created by Aaron Ciuffo (aaron.ciuffo gmail)
+
 This script aims to create a simple method for configuring complex rsync jobs and
 adding additional jobs easily.
 
