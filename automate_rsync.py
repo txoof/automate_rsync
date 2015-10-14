@@ -13,7 +13,7 @@ import re
 # handle commandline options
 import sys, getopt
 
-version='automate rsync over ssh: version 0.3'
+version='automate rsync over ssh: version 0.3.1'
 
 
 # locate executables in the path
@@ -187,7 +187,7 @@ def jobAdd(baseConfig):
       print 'Failed to write to', baseConfig['configFile']
       print 'Error:', e
       return(False)
-
+    print 'Done adding your job:', jobName,'\n'
   #add another job
   jobAdd(baseConfig)
   
