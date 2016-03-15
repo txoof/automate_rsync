@@ -172,6 +172,12 @@ def jobAdd(baseConfig):
   userName=raw_input('user: ')
   config.set(jobName, 'user', userName)
 
+
+  print '\nWould you only like to fetch (download) files from the REMOTE server?'
+  response=raw_input('y/N: ')
+  if response == 'y' or response == 'Y':
+    config.set(jobName, 'fetchonly', 'true')
+
   print '\nWhat is the hostname or IP address of the remote rsync host?'
   server=raw_input('server: ')
   config.set(jobName, 'server', server)
