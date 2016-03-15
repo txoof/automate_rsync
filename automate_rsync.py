@@ -39,8 +39,19 @@ def which(program):
 # create a config file if none is found
 
 def checkConfig(baseConfig):
+  # default configuration values:
+  defRsyncOpts = '-avzh'
+
+  if which('rsync') is None:
+    defRsyncBin = '/usr/bin/rsync'
+    print '**** rsync not found in path using:', defRsyncBin
+  else: defRsyncBin = which('rsync')
+
+  defSSHOpts = '-o IdentitiesOnly=yes'
+
+
   if not os.path.isfile(baseConfig['configFile']):
-    print 'No configuration file was found at: ', baseConfig['configFile']
+    print 'No configuration file was found at:', baseConfig['configFile']
     print 'Would you like to create one?'
     response=raw_input('y/N: ')
     if response=='y' or response=='Y':
@@ -74,7 +85,8 @@ def checkConfig(baseConfig):
   # BaseConfig
   if not config.has_option('%BaseConfig', 'rsyncBin'):
     print '\nWhich rsync binary would you like to use for backups?'
-    print 'Default: ', which('rsync')
+    #print 'Default: ', which('rsync')
+    print 'Default:', defRsyncBin
     response=raw_input('full path to rsync binary or press ENTER for default: ')
     if len(response) > 0:
       response=which('rsync')
@@ -84,19 +96,24 @@ def checkConfig(baseConfig):
     configChanges=True
 
   if not config.has_option('%BaseConfig', 'rsyncOptions'):
-    print '\nWhat global rsync options would you like to use?'
-    print 'Typical options are: -avzh'
+    print '\nWhat global rsync options would you like to use for all jobs?'
+    print 'Typical options are:', defRsyncOpts
     print 'See the rsync man page for more information.'
+    print 'Enter your options below or press ENTER for the defaults (', defRsyncOpts,').'
     response=raw_input('rsync options: ')
     if len(response) > 0:
       config.set('%BaseConfig', 'rsyncOptions', response)
       configChanges=True
+    else:
+      config.set('%BaseConfig', 'rsyncOptions', defRsyncOpts)
+
+
 
   if not config.has_option('%BaseConfig', 'deleteOptions'):
     print '\nWhat delete options would you like to use?'
     print 'For backups typical options are: --delete-excluded'
     print 'See the rsync man page for more information.'
-    response=raw_input('delete options: ')
+    response=raw_input('delete options (press ENTER for none): ')
     config.set('%BaseConfig', 'deleteOptions', response)
     configChanges=True
 
@@ -104,8 +121,13 @@ def checkConfig(baseConfig):
     print '\nWhat additional ssh options would you like to use with rsync?'
     print 'All extra options need to be preceded with "-o"'
     print 'Please see the rsync and ssh_config pages for more informaiton.'
-    print 'To force rsync and ssh to use ONLY a specified SSH key use: -o IdentitiesOnly=yes'
-    response=raw_input('extraSSH options: ')
+    print 'To force rsync and ssh to use a specific SSH key use:', defSSHOpts
+    response=raw_input('Would you like to use the defaults? Y/n: ')
+    if response == '' or response == 'y' or response == 'Y':
+      response = defSSHOpts
+    else:
+      response = ''
+    
     config.set('%sshOptions', 'extraSSH', response)
     configChanges=True
 
@@ -160,11 +182,11 @@ def jobAdd(baseConfig):
   sshKey=raw_input('sshKey: ')
   config.set(jobName, 'sshKey', sshKey)
 
-  print '\nWhat is the full local path to be backedup?'
+  print '\nWhat is the full local path to be used?'
   localPath=raw_input('localPath: ')
   config.set(jobName, 'localPath', localPath)
 
-  print '\nWhat is the full remote path?'
+  print '\nWhat is the full remote path to be used?'
   print 'If you you are using restricted rsync this path should be relative to the restricted path'
   print 'For more information about securing passwordless rsync jobs with rrsync please see'
   print 'https://ftp.samba.org/pub/unpacked/rsync/support/rrsync'
