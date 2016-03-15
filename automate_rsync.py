@@ -221,6 +221,7 @@ def jobAdd(baseConfig):
   
 
 def setBaseConfig(baseConfig):
+  #read base configuration from config file
   config=ConfigParser.RawConfigParser(allow_no_value=True)
   #baseConfig={}
   #baseConfig['configFile']=configFile
@@ -281,8 +282,6 @@ def getRsyncJobs(baseConfig):
 
   rsyncCmd=baseConfig['rsyncBin']+' '+baseConfig['rsyncOptions']+' '+baseConfig['deleteOptions']+' '+"-e 'ssh "+baseConfig['extraSSH']+' '
   
-
-
   try:
     config.readfp(open(baseConfig['configFile']))
   except Exception, e:
@@ -336,8 +335,25 @@ def getRsyncJobs(baseConfig):
         print 'Fatal Error: ', e
         exit(1)
       
+      # ignore if these options are not present
+      try:
+        if config.getboolean(i, 'fetchonly'):
+          fetchOnly = True
+        else:
+          fetchOnly = False
+      except Exception, e:
+        pass
 
-      jobCmd=rsyncCmd+"-i "+sshKey+"' "+excludeString+' '+localPath+' '+user+'@'+server+':'+remotePath
+
+      # build final command here:
+     
+      # rsync from server to local
+      if fetchOnly:
+        jobCmd = rsyncCmd+"-i"+sshKey+"' "+excludeString+' '+user+'@'+server+':'+remotePath+' '+localPath
+
+      #rsync from local to server
+      else:
+        jobCmd=rsyncCmd+"-i "+sshKey+"' "+excludeString+' '+localPath+' '+user+'@'+server+':'+remotePath
 
       rsyncJobs.append(jobCmd)  
      
