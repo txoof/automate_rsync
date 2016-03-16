@@ -371,7 +371,7 @@ def main():
 
   argv=sys.argv[1:]
   try:
-    opts, args = getopt.getopt(argv, 'vqVIc:')
+    opts, args = getopt.getopt(argv, 'vqVIcd:')
   except getopt.GetoptError:
     if '-c' in argv:
       print 'Error: no alternative configuration file specified.'
@@ -381,15 +381,22 @@ def main():
     else:
       print 'usage:'
       print '-c <path to configuration file>'
+      print '-d       dry run - no changes made'
       print '-I       interactively add an rsync job'
       print '-q       quiet (note: this only effects the verbosity of this script)'
       print '-v       verbose'
-      print '-V       Version: ', version
+      print '-V       Version:', version
       exit(0)
 
   for opt, arg in opts:
     if opt=='-c':
       baseConfig['configFile']=arg
+
+
+    if opt=='-d':
+      baseConfig['dryRun'] = True
+    else:
+      baseConfig['dryRun'] = False
 
     if opt=='-I':
       interactiveAdd=True
@@ -432,37 +439,3 @@ def main():
 
 main()
 
-### RSYNC JOBS
-#Documents
-'''
-def rsyncJob(user, server, localPath, remotePath, exclude='', sshKey='~/.ssh/id_rsa'): 
-  sshOpts="-e 'ssh  -o IdentitiesOnly=yes -i "+sshKey+"'"
-  remote=user+'@'+server+':'+remotePath
-  excludeList=''
-
-  for i in exclude:
-    excludeList=excludeList+' --exclude '+i
-
-  rsyncCmd=rsyncBin+' '+rsyncOpts+' '+sshOpts+' '+excludeList+' '+localPath+' '+remote
-
-  os.system(rsyncCmd)
-
-rsyncJob(
-  user='txoof', 
-  server='192.168.10.9',
-  sshKey='/Users/aaronciuffo/.ssh/id_rsa-GC-Bkup',
-  localPath='/Users/aaronciuffo/',
-  remotePath='/',
-  exclude=['Applications/', 'Movies/', 'Library/', 'Music/', '*nobackup*', 'Pictures/', 'Desktop/', 'Downloads/', '.DS_Store', '*Machines.localized*']
-)
-
-#Music
-rsyncJob(
-  user='txoof',
-  server='192.168.10.9',
-  sshKey='/Users/aaronciuffo/.ssh/id_rsa-GC-Media',
-  localPath='/Users/aaronciuffo/Music/',
-  remotePath='/',
-  exclude=[".AppleDouble", "Podcast*", "TV.*Shows"]
-)
-'''
