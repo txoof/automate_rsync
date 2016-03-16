@@ -49,7 +49,6 @@ def checkConfig(baseConfig):
 
   defSSHOpts = '-o IdentitiesOnly=yes'
 
-
   if not os.path.isfile(baseConfig['configFile']):
     print 'No configuration file was found at:', baseConfig['configFile']
     print 'Would you like to create one?'
@@ -280,6 +279,9 @@ def setBaseConfig(baseConfig):
 def getRsyncJobs(baseConfig):
   config=ConfigParser.RawConfigParser(allow_no_value=True)
 
+  if baseConfig['dryRun']:
+    baseConfig['rsyncOptions'] = baseConfig['rsyncOptions']+'n'
+
   rsyncCmd=baseConfig['rsyncBin']+' '+baseConfig['rsyncOptions']+' '+baseConfig['deleteOptions']+' '+"-e 'ssh "+baseConfig['extraSSH']+' '
   
   try:
@@ -371,7 +373,7 @@ def main():
 
   argv=sys.argv[1:]
   try:
-    opts, args = getopt.getopt(argv, 'vqVIcd:')
+    opts, args = getopt.getopt(argv, 'dvqVIc:')
   except getopt.GetoptError:
     if '-c' in argv:
       print 'Error: no alternative configuration file specified.'
@@ -427,6 +429,9 @@ def main():
   rsyncJobs=getRsyncJobs(baseConfig)
 
   for i in rsyncJobs:
+    if baseConfig['dryRun']:
+      print '#'*20
+      print 'Dry Run - no files will be transferred'
     if baseConfig['talk'] > 0:
       print '\nrunning job:'
       if baseConfig['talk'] > 1:
