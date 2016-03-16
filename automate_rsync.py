@@ -36,8 +36,23 @@ def which(program):
 
     return None
 
-# create a config file if none is found
+#make interactive prompts a little more standard looking
+def query(info, prompt):
+  if not info:
+    info = '\n'
+  else:
+    info = '\n'+info
 
+  if not prompt:
+    prompt = ':'
+  else:
+    prompt = prompt+': '
+
+  response = raw_input(prompt)
+
+  return response
+
+# create a config file if none is found
 def checkConfig(baseConfig):
   # default configuration values:
   defRsyncOpts = '-avzh'
