@@ -13,7 +13,7 @@ import re
 # handle commandline options
 import sys, getopt
 
-version='automate rsync over ssh: version 0.3.1'
+version='automate rsync over ssh: version 0.4'
 
 
 # locate executables in the path
