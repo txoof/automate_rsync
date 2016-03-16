@@ -293,7 +293,8 @@ def setBaseConfig(baseConfig):
 def getRsyncJobs(baseConfig):
   config=ConfigParser.RawConfigParser(allow_no_value=True)
 
-  if baseConfig['dryRun']:
+  #if baseConfig['dryRun']:
+  if baseConfig.get('dryRun'):     
     baseConfig['rsyncOptions'] = baseConfig['rsyncOptions']+'n'
 
   rsyncCmd=baseConfig['rsyncBin']+' '+baseConfig['rsyncOptions']+' '+baseConfig['deleteOptions']+' '+"-e 'ssh "+baseConfig['extraSSH']+' '
@@ -352,13 +353,17 @@ def getRsyncJobs(baseConfig):
         exit(1)
       
       # ignore if these options are not present
+
       try:
-        if config.getboolean(i, 'fetchonly'):
-          fetchOnly = True
-        else:
-          fetchOnly = False
+        config.getboolean(i, 'fetchonly')
+        fetchOnly = True
       except Exception, e:
-        pass
+        fetchOnly = False
+
+#      if config.getboolean(i, 'fetchonly'):
+#        fetchOnly = True
+#      else:
+#        fetchOnly = False
 
 
       # build final command here:
@@ -443,7 +448,7 @@ def main():
   rsyncJobs=getRsyncJobs(baseConfig)
 
   for i in rsyncJobs:
-    if baseConfig['dryRun']:
+    if baseConfig.get('dryRun'):
       print '#'*20
       print 'Dry Run - no files will be transferred'
     if baseConfig['talk'] > 0:
