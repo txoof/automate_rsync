@@ -1,4 +1,5 @@
 # automate_rsync
+# needs an update
 Configure rsync once, add multiple jobs with simple headings
 
 This script aims to create a simple method for configuring complex rsync jobs and
