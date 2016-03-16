@@ -38,16 +38,18 @@ def which(program):
 
 #make interactive prompts a little more standard looking
 def query(info, prompt):
+  div = '-'*30+'\n'
   if not info:
-    info = '\n'
+    info = '\n'+div
   else:
-    info = '\n'+info
+    info = '\n'+div+info
 
   if not prompt:
     prompt = ':'
   else:
     prompt = prompt+': '
 
+  print info
   response = raw_input(prompt)
 
   return response
@@ -65,9 +67,9 @@ def checkConfig(baseConfig):
   defSSHOpts = '-o IdentitiesOnly=yes'
 
   if not os.path.isfile(baseConfig['configFile']):
-    print 'No configuration file was found at:', baseConfig['configFile']
-    print 'Would you like to create one?'
-    response=raw_input('y/N: ')
+    info = 'No configuration file was found at: '+baseConfig['configFile']+'\nWould you like to create one?'
+    prompt = 'y/N'
+    response = query(info, prompt)
     if response=='y' or response=='Y':
       try:
         open(baseConfig['configFile'], 'w').write(str(''))
@@ -98,10 +100,10 @@ def checkConfig(baseConfig):
   #Check required sections for options
   # BaseConfig
   if not config.has_option('%BaseConfig', 'rsyncBin'):
-    print '\nWhich rsync binary would you like to use for backups?'
-    #print 'Default: ', which('rsync')
-    print 'Default:', defRsyncBin
-    response=raw_input('full path to rsync binary or press ENTER for default: ')
+    info = 'Which rsync binary would you like to use?\nSystem rsync found at: '+defRsyncBin
+    prompt = 'full path to rsync binary or press ENTER for default'
+    response = query(info, prompt)
+
     if len(response) > 0:
       response=which('rsync')
     else:
@@ -110,11 +112,9 @@ def checkConfig(baseConfig):
     configChanges=True
 
   if not config.has_option('%BaseConfig', 'rsyncOptions'):
-    print '\nWhat global rsync options would you like to use for all jobs?'
-    print 'Typical options are:', defRsyncOpts
-    print 'See the rsync man page for more information.'
-    print 'Enter your options below or press ENTER for the defaults (', defRsyncOpts,').'
-    response=raw_input('rsync options: ')
+    info = 'What global rsync options would you like to use for all jobs?\nTypical options are: ' + defRsyncOpts + '\nSee the rsync man page for more information.\nEnter your options below or press ENTER for the defaults (' + defRsyncOpts + ').'
+    prompt = 'rsync options'
+    response = query(info, prompt)
     if len(response) > 0:
       config.set('%BaseConfig', 'rsyncOptions', response)
       configChanges=True
@@ -124,23 +124,20 @@ def checkConfig(baseConfig):
 
 
   if not config.has_option('%BaseConfig', 'deleteOptions'):
-    print '\nWhat delete options would you like to use?'
-    print 'For backups typical options are: --delete-excluded'
-    print 'See the rsync man page for more information.'
-    response=raw_input('delete options (press ENTER for none): ')
+    info = '\nWhat delete options would you like to use?\nFor backups typical options are: --delete-excluded\nSee the rsync man page for more information.'
+    prompt = 'delete options (press ENTER for none)'
+    response = query(info, prompt)
     config.set('%BaseConfig', 'deleteOptions', response)
     configChanges=True
 
   if not config.has_option('%sshOptions', 'extraSSH'):
-    print '\nWhat additional ssh options would you like to use with rsync?'
-    print 'All extra options need to be preceded with "-o"'
-    print 'Please see the rsync and ssh_config pages for more informaiton.'
-    print 'To force rsync and ssh to use a specific SSH key use:', defSSHOpts
-    response=raw_input('Would you like to use the defaults? Y/n: ')
-    if response == '' or response == 'y' or response == 'Y':
+    info = 'What additional ssh options would you like to use with rsync?\nAll extra options need to be preceded with "-o"\nPlease see the rsync and ssh_config pages for more informaiton\nTo force rsync and ssh to use a specific SSH key use: '+defSSHOpts
+    prompt = 'Press ENTER for default options or enter your own (space for none)'
+
+    response = query(info, prompt)
+
+    if response is None:
       response = defSSHOpts
-    else:
-      response = ''
     
     config.set('%sshOptions', 'extraSSH', response)
     configChanges=True
@@ -158,8 +155,10 @@ def checkConfig(baseConfig):
 
 def jobAdd(baseConfig):
   configChanges=False
-  print 'Would you like to interactively add a job?'
-  response=raw_input('Y/n: ')
+
+  response = query('Would you like to interactively add a job?', 'Y/n: ')
+#  print 'Would you like to interactively add a job?'
+#  response=raw_input('Y/n: ')
   if not (response=='y' or response=='Y' or response==''):
     #print 'Exiting. Please manually add at least one job to', baseConfig['configFile']
     return(True)
@@ -177,48 +176,48 @@ def jobAdd(baseConfig):
     print 'Error: ', e
     return(False)
   
-  print '\nPlease give this job a descriptive name such as "Remote Host - LocalDirectory"'
-  jobName=raw_input('jobName: ')
+  info = 'Please give this job a descriptive name such as "Remote Host - LocalDirectory"'
+  prompt = 'job name'
+  jobName= query(info, prompt)
   configChanges=True
   config.add_section(jobName)
 
-  print '\nWhat is the *remote* username to use?'
-  userName=raw_input('user: ')
+  info = 'What is the *remote* username to use?'
+  prompt = 'remote username'
+  userName = query(info, prompt)
   config.set(jobName, 'user', userName)
 
 
-  print '\nWould you only like to fetch (download) files from the REMOTE server?'
-  response=raw_input('y/N: ')
+  info = 'Would you like to fetch (download) files FROM the REMOTE server?'
+  prompt = 'y/N'
+  response = query(info, prompt)
   if response == 'y' or response == 'Y':
     config.set(jobName, 'fetchonly', 'true')
 
-  print '\nWhat is the hostname or IP address of the remote rsync host?'
-  server=raw_input('server: ')
+  info = 'What is the hostname or IP address of the remote rsync host?'
+  prompt = 'server ip or fqdn'
+  server=query(info, prompt)
   config.set(jobName, 'server', server)
 
-  print '\nWhat is the full path to the ssh key should be used with this server?'
-  print 'If no key is to be used or only one key per server is used this can be blank'
-  print 'If a specific key is used please set extraSSH=-o IdentitiesOnly=yes'
-  sshKey=raw_input('sshKey: ')
+  info = 'What is the full path to the ssh key should be used with this server?\nIf no key is to be used, or there is only one key per remote host, this can be blank.\nNOTE: If a specific key is used please set extraSSH=-o IdentitiesOnly=yes in the following step.'
+  prompt = 'path to sshKey'
+  sshKey = query(info, prompt)
   config.set(jobName, 'sshKey', sshKey)
 
-  print '\nWhat is the full local path to be used?'
-  localPath=raw_input('localPath: ')
+  info = 'What is the full local path to be used?'
+  prompt = 'local path'
+  localPath = query(info, prompt)
   config.set(jobName, 'localPath', localPath)
 
-  print '\nWhat is the full remote path to be used?'
-  print 'If you you are using restricted rsync this path should be relative to the restricted path'
-  print 'For more information about securing passwordless rsync jobs with rrsync please see'
-  print 'https://ftp.samba.org/pub/unpacked/rsync/support/rrsync'
-  remotePath=raw_input('remotePath: ')
+  info = 'What is the full remote path to be used?\nIf you you are using restricted rsync this path should be relative to the root of the restricted path.\nFor more information about securing passwordless rsync jobs with rrsync please see:\nhttps://ftp.samba.org/pub/unpacked/rsync/support/rrsync'
+  prompt = 'remote path:'
+  remotePath = query(info, prompt)
   config.set(jobName, 'remotePath', remotePath)
 
-  print '\nWhat should be excluded?'
-  print 'Please see the rsync man page for more information on regular expressions and exclusions'
-  print 'Format: "/path/to/Dir1", "*Virtual.Machines", "*dump", "\.swp"'
-  exclude=raw_input('exclude: ')
+  info = 'What should be excluded from the transfer?\nPlease see the rsync man page for more information on regular expressions and exclusions\nFormat: "/path/to/Dir1", "*Virtual.Machines", "*dump", "\.swp"'
+  prompt = 'exclude'
+  exclude=query(info, prompt)
   config.set(jobName, 'exclude', exclude)
-
 
   
   if configChanges:
@@ -451,11 +450,8 @@ def main():
       print '\nrunning job:'
       if baseConfig['talk'] > 1:
         print i, '\n'
-    # run the system call
+    # run the rsync job in the shell
     os.system(i)
-
-
-
 
 main()
 
