@@ -1,462 +1,388 @@
-#!/usr/bin/python
-## automate rsync over ssh
-# Version 1 - 24 July 2015
+#!/usr/bin/env python
+# coding: utf-8
 
-# run commands and interact with the OS
+
+# In[17]:
+
+
+#get_ipython().run_line_magic('load_ext', 'autoreload')
+#get_ipython().run_line_magic('autoreload', '2')
+
+
+
+
+# In[18]:
+
+
+#get_ipython().run_line_magic('alias', 'nbc /Users/aaronciuffo/bin/develtools/nbconvert automate_rsync_v3.ipynb')
+#get_ipython().run_line_magic('nbc', '')
+
+
+
+
+# In[2]:
+
+
+import configparser
+from pathlib import Path
 import os
-# gracefully deal with configurationf iles
-import ConfigParser
-
-# regular expressions
+import shutil
+import sys
+import logging
+import tempfile
+import uuid
 import re
-
-# handle commandline options
-import sys, getopt
-
-version='automate rsync over ssh: version 0.4.1'
-
-
-# locate executables in the path
-# Thanks to http://stackoverflow.com/users/20840/jay
-# http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python/377028#377028
-def which(program):
-    def is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
-
-    fpath, fname = os.path.split(program)
-    if fpath:
-        if is_exe(program):
-            return program
-    else:
-        for path in os.environ["PATH"].split(os.pathsep):
-            path = path.strip('"')
-            exe_file = os.path.join(path, program)
-            if is_exe(exe_file):
-                return exe_file
-
-    return None
-
-#make interactive prompts a little more standard looking
-def query(info, prompt):
-  div = '-'*30+'\n'
-  if not info:
-    info = '\n'+div
-  else:
-    info = '\n'+div+info
-
-  if not prompt:
-    prompt = ':'
-  else:
-    prompt = prompt+': '
-
-  print info
-  response = raw_input(prompt)
-
-  return response
-
-# create a config file if none is found
-def checkConfig(baseConfig):
-  # default configuration values:
-  defRsyncOpts = '-avzh'
-
-  if which('rsync') is None:
-    defRsyncBin = '/usr/bin/rsync'
-    print '**** rsync not found in path using:', defRsyncBin
-  else: defRsyncBin = which('rsync')
-
-  defSSHOpts = '-o IdentitiesOnly=yes'
-
-  if not os.path.isfile(baseConfig['configFile']):
-    info = 'No configuration file was found at: '+baseConfig['configFile']+'\nWould you like to create one?'
-    prompt = 'y/N'
-    response = query(info, prompt)
-    if response=='y' or response=='Y':
-      try:
-        open(baseConfig['configFile'], 'w').write(str(''))
-      except Exception, e:
-        print 'Could not write config file:', e
-        return(False)
-    else:
-      print 'Cannot continue without a configuration file. Exiting.'
-      exit(0)
-  
-  config=ConfigParser.RawConfigParser()
-  try:
-    config.readfp(open(baseConfig['configFile']))
-  except Exception, e:
-    print 'Failed to load configuration file: ', baseConfig['configFile']
-    print 'Error: ', e
-    return(False)
-
-  #check for required sections
-  configChanges=False
-  requiredSections=['%BaseConfig', '%sshOptions']
-
-  for i in requiredSections:
-    if not config.has_section(i):
-      config.add_section(i)
-      configChanges=True
-
-  #Check required sections for options
-  # BaseConfig
-  if not config.has_option('%BaseConfig', 'rsyncBin'):
-    info = 'Which rsync binary would you like to use?\nSystem rsync found at: '+defRsyncBin
-    prompt = 'full path to rsync binary or press ENTER for default'
-    response = query(info, prompt)
-
-    if len(response) > 0:
-      response=which('rsync')
-    else:
-      response=which('rsync')
-    config.set('%BaseConfig', 'rsyncBin', response)
-    configChanges=True
-
-  if not config.has_option('%BaseConfig', 'rsyncOptions'):
-    info = 'What global rsync options would you like to use for all jobs?\nTypical options are: ' + defRsyncOpts + '\nSee the rsync man page for more information.\nEnter your options below or press ENTER for the defaults (' + defRsyncOpts + ').'
-    prompt = 'rsync options'
-    response = query(info, prompt)
-    if len(response) > 0:
-      config.set('%BaseConfig', 'rsyncOptions', response)
-      configChanges=True
-    else:
-      config.set('%BaseConfig', 'rsyncOptions', defRsyncOpts)
+import shlex
+import subprocess
+import argparse
 
 
 
-  if not config.has_option('%BaseConfig', 'deleteOptions'):
-    info = '\nWhat delete options would you like to use?\nFor backups typical options are: --delete-excluded\nSee the rsync man page for more information.'
-    prompt = 'delete options (press ENTER for none)'
-    response = query(info, prompt)
-    config.set('%BaseConfig', 'deleteOptions', response)
-    configChanges=True
 
-  if not config.has_option('%sshOptions', 'extraSSH'):
-    info = 'What additional ssh options would you like to use with rsync?\nAll extra options need to be preceded with "-o"\nPlease see the rsync and ssh_config pages for more informaiton\nTo force rsync and ssh to use a specific SSH key use: '+defSSHOpts
-    prompt = 'Press ENTER for default options or enter your own (space for none)'
+# In[3]:
 
-    response = query(info, prompt)
 
-    if response is None:
-      response = defSSHOpts
+# CONSTANTS
+VERSION = '0.1.00'
+APP_NAME = 'automate_rsync'
+DEVEL_NAME = 'com.txoof'
+CONFIG_FILE = f'{APP_NAME}.ini'
+
+
+EXPECTED_BASE_KEYS = {'rsync_options': '',
+                      'delete_options': ''}
+
+EXPECTED_JOB_KEYS = {'user': None,
+                     'remotehost': None,
+                     'sshkey': None,
+                     'localpath': None,
+                     'remotepath': None,
+                     'exclude': []}
+
+EXPECTED_SSH_KEYS = {'extrassh': ''}
+
+CONFIG_PATH = Path(f'~/.config/{DEVEL_NAME}.{APP_NAME}').expanduser().absolute()
+
+
+
+
+# In[4]:
+
+
+def sample_config():
+    return '''[%base_config]
+rsync_options = -a -z
+delete_options = --delete-excluded
+
+[%ssh_opts]
+extrassh = -o IdentitiesOnly=yes
+
+
+## each 'job' must include at minimum the keys "localpath" and "remotepath"
+## other keys are optional (see the example below)
+## add an `=` to the beginning of a job to disable it
+
+
+## copy this TEMPLATE and remove the `=` to label each job
+[=TEMPLATE]
+## not required for local syncs that do not use ssh
+user = <optional: remote username>
+
+## not required for local syncs that do not use ssh
+remotehost = <optional: ip or host name>
+
+## not required for local syncs that do not use ssh
+sshkey = <optional: path to private ssh key>
+
+## required
+localpath = <local path to sync from -- mind the trailing `/`>
+# localpath = /Users/jbuck/Documents <-- this will sync the dir
+# localpath = /Users/jbuck/Documents/ <-- this will sync the contents only
+
+## required
+remotepath = <remote path to sync into -- mind the trailing `/`>
+
+## optional
+exclude = <comma separated list of patterns to exclude from sync>
+# exclude = .DS_Store, data_base, /Downloads, /Applications
+
+## Local sync example (disabled)
+## sync the entire directory `foo` into `ColdStorage`
+[=Foo -> Bar Local Sync]
+localpath = /Users/jbuck/Documents/foo
+remotepath = /Volumes/ColdStorage/
+
+
+## Remote sync over ssh with specific ssh key (disabled)
+## this is particularly useful when using restricted rsync at the remote end
+[=iMac JBuck -> Backup Host]
+user = jbuck
+remotehost = backups.local
+sshkey = /Users/jbuck/.ssh/id_rsa-backups
+localpath = /Users/jbuck/Documents
+## Note: this is the path **relative** to the remote filesystem
+## Restricted rsync exposes only exposes a portion of the remote file system
+## that portion is treated as the "root" of the file system
+remotepath = /iMac.backups/
+exclude = .AppleDouble, .DS_Store, .git, .local, /Library, /Application*, /Music'''
+
+
+
+
+# In[5]:
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Command line parser')
+    parser.add_argument('-v', dest='verbose', action='store_true', default=False, help='enable verbose output')
+    parser.add_argument('-d', dest='dry_run', action='store_true', default=False, help='set rsync --dry-run')
+    args, unknown = parser.parse_known_args()
     
-    config.set('%sshOptions', 'extraSSH', response)
-    configChanges=True
+    return args
 
-  if configChanges:
-    try:
-      with open(baseConfig['configFile'], 'wb') as configfile:
-        config.write(configfile)
-    except Exception, e:
-      print 'Failed to write to', baseConfig['configFile']
-      print 'Error:', e
-      return(False)
 
-  return(True)
 
-def jobAdd(baseConfig):
-  configChanges=False
 
-  response = query('Would you like to interactively add a job?', 'Y/n: ')
-#  print 'Would you like to interactively add a job?'
-#  response=raw_input('Y/n: ')
-  if not (response=='y' or response=='Y' or response==''):
-    #print 'Exiting. Please manually add at least one job to', baseConfig['configFile']
-    return(True)
-    #exit(0)
+# In[6]:
+
+
+def get_config(file):
+    file = Path(file)
     
-  if not os.path.isfile(baseConfig['configFile']):
-    print 'No configuration file was found at: ', baseConfig['configFile']
-    exit(1)
-  
-  config=ConfigParser.RawConfigParser()
-  try:
-    config.readfp(open(baseConfig['configFile']))
-  except Exception, e:
-    print 'Failed to load configuration file: ', baseConfig['configFile']
-    print 'Error: ', e
-    return(False)
-  
-  info = 'Please give this job a descriptive name such as "Remote Host - LocalDirectory"'
-  prompt = 'job name'
-  jobName= query(info, prompt)
-  configChanges=True
-  config.add_section(jobName)
-
-  info = 'What is the *remote* username to use?'
-  prompt = 'remote username'
-  userName = query(info, prompt)
-  config.set(jobName, 'user', userName)
-
-
-  info = 'Would you like to fetch (download) files FROM the REMOTE server?'
-  prompt = 'y/N'
-  response = query(info, prompt)
-  if response == 'y' or response == 'Y':
-    config.set(jobName, 'fetchonly', 'true')
-
-  info = 'What is the hostname or IP address of the remote rsync host?'
-  prompt = 'server ip or fqdn'
-  server=query(info, prompt)
-  config.set(jobName, 'server', server)
-
-  info = 'What is the full path to the ssh key should be used with this server?\nIf no key is to be used, or there is only one key per remote host, this can be blank.\nNOTE: If a specific key is used please set extraSSH=-o IdentitiesOnly=yes in the following step.'
-  prompt = 'path to sshKey'
-  sshKey = query(info, prompt)
-  config.set(jobName, 'sshKey', sshKey)
-
-  info = 'What is the full local path to be used?'
-  prompt = 'local path'
-  localPath = query(info, prompt)
-  config.set(jobName, 'localPath', localPath)
-
-  info = 'What is the full remote path to be used?\nIf you you are using restricted rsync this path should be relative to the root of the restricted path.\nFor more information about securing passwordless rsync jobs with rrsync please see:\nhttps://ftp.samba.org/pub/unpacked/rsync/support/rrsync'
-  prompt = 'remote path:'
-  remotePath = query(info, prompt)
-  config.set(jobName, 'remotePath', remotePath)
-
-  info = 'What should be excluded from the transfer?\nPlease see the rsync man page for more information on regular expressions and exclusions\nFormat: "/path/to/Dir1", "*Virtual.Machines", "*dump", "\.swp"'
-  prompt = 'exclude'
-  exclude=query(info, prompt)
-  config.set(jobName, 'exclude', exclude)
-
-  
-  if configChanges:
-    try:
-      with open(baseConfig['configFile'], 'wb') as configfile:
-        config.write(configfile)
-    except Exception, e:
-      print 'Failed to write to', baseConfig['configFile']
-      print 'Error:', e
-      return(False)
-    print 'Done adding your job:', jobName,'\n'
-  #add another job
-  jobAdd(baseConfig)
-  
-
-def setBaseConfig(baseConfig):
-  #read base configuration from config file
-  config=ConfigParser.RawConfigParser(allow_no_value=True)
-  #baseConfig={}
-  #baseConfig['configFile']=configFile
-
-  # check for config file or create one with the user
-  if not checkConfig(baseConfig):
-    print 'Error in configuraiton file:', baseConfig['configFile']
-    exit(1)
-
-  configFile=baseConfig['configFile']
-  try:
-    config.readfp(open(configFile))
-  except Exception, e:
-    print 'Failed to load configuration file at: ', configFile
-    print 'Please create a configuration file at: ', configFile
-    print 'Error: ', e
-    exit(2)
-
-  sectionKey='%BaseConfig'
-  # read in basic configuration settings
-  try:
-    baseConfig['rsyncBin']=config.get(sectionKey, 'rsyncBin')
-  except Exception, e:
-    print 'Using /usr/bin/rsync for rsync binary'
-    baseConfig['rsyncBin']='/usr/bin/python'
-
-  try:
-    baseConfig['rsyncOptions']=config.get(sectionKey, 'rsyncOptions')
-  except Exception, e:
-    print 'Using rsync options: --archive --verbose --compress --human-readable'
-    baseConfig['rsyncOptions']='-avzh'
-
-  try:
-    baseConfig['deleteOptions']=config.get(sectionKey, 'deleteOptions')
-  except Exception, e:
-    print 'No files on remote host will be deleted.'
-    baseConfig['deleteOptions']=''
-
-
-  # read in SSH configuration settings
-  sectionKey='%sshOptions'
-  try:
-    baseConfig['extraSSH']=config.get(sectionKey, 'extraSSH')
-  except Exception, e:
-    baseConfig['extraSSH']=''
-
-  if baseConfig['talk'] > 1:
-    print '***baseConfig Values***'
-    for key, value in baseConfig.iteritems():
-      print key+':', value
-    print 2*'\n'
-
-  return(baseConfig)
-
-
-def getRsyncJobs(baseConfig):
-  config=ConfigParser.RawConfigParser(allow_no_value=True)
-
-  #if baseConfig['dryRun']:
-  if baseConfig.get('dryRun'):     
-    baseConfig['rsyncOptions'] = baseConfig['rsyncOptions']+'n'
-
-  rsyncCmd=baseConfig['rsyncBin']+' '+baseConfig['rsyncOptions']+' '+baseConfig['deleteOptions']+' '+"-e 'ssh "+baseConfig['extraSSH']+' '
-  
-  try:
-    config.readfp(open(baseConfig['configFile']))
-  except Exception, e:
-    print 'Failed to load configuration file at: ', baseConfig['configFile']
-    print 'Please create a configuration file at: ', baseconfig['configFile']
-    print 'Error: ', e
-    exit(2)
-  
-  if baseConfig['talk'] > 0:
-    print 'gathering jobs...'
-
-  rsyncJobs=[]
-  for i in config.sections():
-
-    #Configuration sections begin with a '%'; job sections can be any string
-    # Literal '#' are treated as comments and jobs that contain a '#' are skipped
-    if not ('%' in i or '#' in i):
-      if baseConfig['talk'] > 0:
-        print 'found job: ', i
-      excludeList=[]
-      excludeString=''
-      user=''
-      server=''
-      sshKey=''
-      localPath=''
-      remotePath=''
-      for j in config.options(i):
-      #pull out exclude items 
+    if not file.exists():
+        file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
         try:
-          rawExclude=config.get(i, 'exclude')
-        except Exception, e:
-          rawExclude=''
+            out_file = open(file, 'w')
+            out_file.writelines(sample_config())
+            out_file.close()
+        except OSError as e:
+            do_exit(e, 2)
 
-      #FIXME - find a better way to clean up and split the exclude strings
-      # I'm SURE there's a bettery way to do this
-      cleanExclude=re.sub("'", "", rawExclude)
-      cleanExclude=re.sub(",", "", cleanExclude)
-      cleanExclude=re.sub('"', '', cleanExclude)
-      excludeList=cleanExclude.split()
-      for k in excludeList:
-        excludeString=' --exclude '+k+excludeString
-
-      # fail gracefully if any of these things are missing
-      try:
-        user=config.get(i, 'user')
-        server=config.get(i, 'server')
-        sshKey=config.get(i, 'sshKey')
-        localPath=config.get(i, 'localPath')
-        remotePath=config.get(i, 'remotePath')
-      except Exception, e:
-        print 'Fatal Error: ', e
-        exit(1)
-      
-      # ignore if these options are not present
-
-      try:
-        config.getboolean(i, 'fetchonly')
-        fetchOnly = True
-      except Exception, e:
-        fetchOnly = False
-
-#      if config.getboolean(i, 'fetchonly'):
-#        fetchOnly = True
-#      else:
-#        fetchOnly = False
+    config = configparser.ConfigParser()
+        
+    config.read(file)
+    
+    return config
 
 
-      # build final command here:
-     
-      # rsync from server to local
-      if fetchOnly:
-        jobCmd = rsyncCmd+"-i"+sshKey+"' "+excludeString+' '+user+'@'+server+':'+remotePath+' '+localPath
 
-      #rsync from local to server
-      else:
-        jobCmd=rsyncCmd+"-i "+sshKey+"' "+excludeString+' '+localPath+' '+user+'@'+server+':'+remotePath
 
-      rsyncJobs.append(jobCmd)  
-     
-  if len(rsyncJobs) < 1:
-    print 'No rsync jobs found.  Please add a job to', baseConfig['configFile']
-    jobAdd(baseConfig)
-  return(rsyncJobs)
+# In[7]:
+
+
+def parse_job(job):
+    expected_keys=EXPECTED_JOB_KEYS
+    parsed_job = {}
+    for key in expected_keys:
+        try:
+            parsed_job[key] = job[key]
+        except KeyError:
+            parsed_job[key] = expected_keys[key]
+    return parsed_job 
+
+
+
+
+# In[8]:
+
+
+def parse_config(config):
+    expected_base_keys = EXPECTED_BASE_KEYS
+    expected_ssh_keys = EXPECTED_SSH_KEYS
+    
+    base_config = {}
+    ssh_opts = {}
+    
+    for key in expected_base_keys:
+        try:
+            base_config[key] = config['%base_config'][key]
+        except KeyError:
+            base_config[key] = expected_base_keys[key]
+    
+    for key in expected_ssh_keys:
+        try:
+            ssh_opts[key] = config['%ssh_opts'][key]
+        except KeyError:
+            ssh_opts[key] = expected_ssh_keys[key]
+    return (base_config, ssh_opts)
+
+
+
+
+# In[9]:
+
+
+def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False, verbose=False):
+    '''build an rsync from ini file
+    
+    Args:
+        name(`str`): name of the job -- used for identifying exclude file
+        job(`dict`): individual job from ini 
+        base_config(`dict`): base_config from ini
+        ssh_opts(`dict`): ssh_opts from ini
+        tempdir(`Path`): path to temporary directory for exclude files
+        dry_run(`bool`): add `--dry-run` to rsync command for testing
+        verbose(`bool`): add `-v` to rsync command for debugging
+    
+    Returns:
+        string -- rsync command'''
+    
+    name = re.sub(r'[\W_]+', '', name) + str(uuid.uuid4())
+    
+    rsync_command = []
+    ssh_command = ''
+    tempdir = Path(tempdir)
+    
+    # get the rsync binary path
+    try:
+        stream = os.popen('which rsync')
+        rsync_bin = stream.read()
+    except Exception as e:
+        do_exit(e, 1)
+    
+    # add the binary
+    rsync_command.append(rsync_bin)
+    # add the options from the ini file
+    rsync_command.append(base_config['rsync_options'])
+    
+    # add additional options from the args
+    if dry_run:
+        rsync_command.append('--dry-run')
+        
+    if verbose:
+        rsync_command.append('-v')
+    
+    rsync_command.append(base_config['delete_options'])
+    
+    if job['sshkey']:
+            ssh_command = f'ssh -o IdentitiesOnly=yes -i {job["sshkey"]}'
+        
+    if len(ssh_command) > 0:
+        rsync_command.append(f'-e "{ssh_command}"')
+    
+    
+    try:
+        exclude_file = open(tempdir/name, 'w')
+    except Exception as e:
+        do_exit(f'{e} while processing {name}', 2)
+    
+    if job['exclude']:
+        exclude_list = [x.strip() for x in job['exclude'].split(',')]
+        for l in exclude_list:
+            exclude_file.write(f'{l}\n')
+
+        rsync_command.append(f'--exclude-from={tempdir/name}')
+    
+    if not job['localpath']:
+        do_exit(f'no localpath specified for job: {name}')
+    
+    rsync_command.append(job['localpath'])
+    
+    if not job['remotepath']:
+        do_exit(f'no remote path specified for job {name}')
+    else:
+        remotepath = job['remotepath']    
+    
+    if job['user']:
+        remotepath = f"{job['user']}@{job['remotehost']}:{remotepath}"
+    
+    rsync_command.append(remotepath)
+    
+    
+    return shlex.split(' '.join(rsync_command))
+#     return rsync_command
+    
+    
+
+    
+
+
+
+
+# In[13]:
 
 
 def main():
-  # add option to specify configuration file from command line
-  
-  baseConfig={}
-  interactiveAdd=False
+    args = parse_args()
+    
+    dry_run = args.dry_run
+    verbose = args.verbose
+    
+    
+    def do_exit(e, exit_status=99):
+        '''try to handle exits and cleanup'''
+        cleanup()
+        print(f'{APP_NAME} v{VERSION}')
+        print(e)
+        sys.exit(exit_status)
 
-  argv=sys.argv[1:]
-  try:
-    opts, args = getopt.getopt(argv, 'dvqVIc:')
-  except getopt.GetoptError:
-    if '-c' in argv:
-      print 'Error: no alternative configuration file specified.'
-      print 'Default configuration file is ~/.automate_rsyncrc'
-      print 'usage: ', sys.argv[0], '-c <configuration file>'
-      exit(0)
-    else:
-      print 'usage:'
-      print '-c <path to configuration file>'
-      print '-d       dry run - no changes made'
-      print '-I       interactively add an rsync job'
-      print '-q       quiet (note: this only effects the verbosity of this script)'
-      print '-v       verbose'
-      print '-V       Version:', version
-      exit(0)
-
-  for opt, arg in opts:
-    if opt=='-c':
-      baseConfig['configFile']=arg
-
-
-    if opt=='-d':
-      baseConfig['dryRun'] = True
-    else:
-      baseConfig['dryRun'] = False
-
-    if opt=='-I':
-      interactiveAdd=True
-
-    if opt=='-q':
-      baseConfig['talk']=0
-
-    if opt=='-v':
-      baseConfig['talk']=2
-
-    if opt=='-V':
-      print 'Version: ', version
-      exit()
-
-  if not 'talk' in baseConfig:
-    baseConfig['talk']=1
-
-  if not 'configFile' in baseConfig:
-    baseConfig['configFile']=os.path.expanduser('~/.automate_rsyncrc')
+    def cleanup():
+        try:
+            shutil.rmtree(tempdir)
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(e)
+            exit(2)
+    
+    tempdir = ''
+    try:
+        tempdir = tempfile.mkdtemp()
+    except Exception as e:
+        do_exit(e, 2)            
+            
+    config_file = Path(CONFIG_PATH)/CONFIG_FILE
+    # config = get_config(Path(default_cfg_name).absolute())
+    config = get_config(config_file)
+    base_config, ssh_opts = parse_config(config)
 
 
-  #setup basic configuration for how rsync should act
-  baseConfig=setBaseConfig(baseConfig)
+    jobs = []
+    for section in config.sections():
+        if not (section.startswith('%') or section.startswith('=')):
+            jobs.append(section)
 
-  if interactiveAdd:
-    jobAdd(baseConfig)
+    if len(jobs) < 1:
+        do_exit('ERROR: no jobs are defined.\nEdit {config_file}', 1)
 
-  rsyncJobs=getRsyncJobs(baseConfig)
+    if verbose:
+        print(f'Found {len(jobs)} job(s):')
+        for job in jobs:
+            print(f'\t{job}')
+    
+    parsed_jobs = {}
+    for job in jobs:
+        parsed_jobs[job] = (parse_job(config[job]))
 
-  for i in rsyncJobs:
-    if baseConfig.get('dryRun'):
-      print '#'*20
-      print 'Dry Run - no files will be transferred'
-    if baseConfig['talk'] > 0:
-      print '\nrunning job:'
-      if baseConfig['talk'] > 1:
-        print i, '\n'
-    # run the rsync job in the shell
-    os.system(i)
+    rsync_commands = {}
+    for job in parsed_jobs:
+        rsync_commands[job] = build_rsync_command(name=job, job=parsed_jobs[job], base_config=base_config, ssh_opts=ssh_opts, 
+                            tempdir=tempdir, dry_run=dry_run, verbose=verbose)
 
-main()
+
+    for job in rsync_commands:
+        print(f'Running job: [{job}]')
+        if verbose:
+            print(' '.join(rsync_commands[job]))
+    #     stream = os.popen(command)
+    #     print(f'this is the stream: {stream.read()}')
+
+        process = subprocess.run(rsync_commands[job], 
+                                 stdout=subprocess.PIPE,
+                                 universal_newlines=True
+                                )
+        output = process.stdout
+        if verbose:
+            print(output.strip())
+            print('done')
+
+
+
+
+# In[14]:
+
+
+if __name__ == '__main__':
+    main()
+
 
