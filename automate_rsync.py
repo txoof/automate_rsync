@@ -11,7 +11,7 @@
 
 
 
-# In[3]:
+# In[7]:
 
 
 #get_ipython().run_line_magic('alias', 'nbc /Users/aaronciuffo/bin/develtools/nbconvert automate_rsync.ipynb')
@@ -71,10 +71,16 @@ CONFIG_PATH = Path(f'~/.config/{DEVEL_NAME}.{APP_NAME}').expanduser().absolute()
 
 def sample_config():
     return '''[%base_config]
+## options to use for all rsync jobs
 rsync_options = -a -z
+## deletion strategies to use (leave blank for none)
 delete_options = --delete-excluded
 
 [%ssh_opts]
+## extra options to pass to the ssh module
+## -e "ssh <extrassh>"
+## -o IdentitiesOnly=yes forces the use of one single key file
+## this prevents ssh from searching all availble keys
 extrassh = -o IdentitiesOnly=yes
 
 
@@ -133,7 +139,7 @@ exclude = .AppleDouble, .DS_Store, .git, .local, /Library, /Application*, /Music
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Command line parser')
+    parser = argparse.ArgumentParser(description=f'{APP_NAME} v{VERSION} -- run complex rsync jobs from an ini file')
     parser.add_argument('-v', dest='verbose', action='store_true', default=False, help='enable verbose output')
     parser.add_argument('-d', dest='dry_run', action='store_true', default=False, help='set rsync --dry-run')
     args, unknown = parser.parse_known_args()
@@ -343,7 +349,7 @@ def main():
             jobs.append(section)
 
     if len(jobs) < 1:
-        do_exit('ERROR: no jobs are defined.\nEdit {config_file}', 1)
+        do_exit(f'ERROR: no jobs are defined.\nEdit {config_file}', 1)
 
     if verbose:
         print(f'Found {len(jobs)} job(s):')
