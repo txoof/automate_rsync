@@ -1,75 +1,127 @@
 # automate_rsync
-Configure rsync once, add multiple jobs with simple headings
+Simplify running complex rsync jobs through an .ini file.
 
-Released under GPL V3.0
+automate_rsync is writen entirely in Python 3 with standard modules and runs as a single file.
 
-Created by Aaron Ciuffo (aaron.ciuffo gmail)
+## Use
+`$ automate_rsync.py`
 
-This script aims to create a simple method for configuring complex rsync jobs and
-adding additional jobs easily.
+```
+automate_rsync -- run complex rsync jobs from an ini file
 
-Quick start (tl;dr):
+optional arguments:
+  -h, --help  show this help message and exit
+  -v          enable verbose output
+  -d          set rsync --dry-run
+```
 
-  If no configuration file is found (~/.automate_rsyncrc) the script will walk you
-  through the intial configuration.
+## Setup
+The first time automate_rsync runs it will create an `.ini` file in `~/.config/com.txoof.automate_rsync` and remind you to edit the configuration file:
+```
+$ automate_rsync.py
+automate_rsync
+ERROR: no jobs are defined.
+Edit /Users/jbuck/.config/com.txoof.automate_rsync/automate_rsync.ini
+```
 
-    $ ./automate_rsync 
+### .ini file
+The default, suggested settings are shown below
 
-No configuration file was found at:  /Users/aaronciuffo/.automate_rsyncrc
-Would you like to create one?
-y/N: y
+The .ini file contains three main parts:
 
-Which rsync binary would you like to use for backups?
-Default:  /usr/bin/rsync
-full path to rsync binary or press ENTER for default:
+#### Basic configuration
+```
+[%base_config]
+## options to use for all rsync jobs
+rsync_options = -a -z
+## deletion strategies to use (leave blank for none)
+delete_options = --delete-excluded
+```
 
-What global rsync options would you like to use?
-Typical options are: -avzh
-See the rsync man page for more information.
-rsync options: -avzh
+#### SSH Options 
+Options passed to the ssh module 
+```
+[%ssh_opts]
+## extra options to pass to the ssh module
+## -e "ssh <extrassh>"
+## -o IdentitiesOnly=yes forces the use of one single key file
+## this prevents ssh from searching all availble keys
+extrassh = -o IdentitiesOnly=yes
+```
 
-What delete options would you like to use?
-For backups typical options are: --delete-excluded
-See the rsync man page for more information.
-delete options: --delete-excluded
+#### Individual Jobs 
+Each job must have a unique name
+Add an `=` to the job name to disable it: `[=Home Dir -> Backup Server]`
+```
+[jobs]
+## `user`: not required for local syncs that do not use ssh
+user = <optional: remote username>
 
-What additional ssh options would you like to use with rsync?
-All extra options need to be preceded with "-o"
-Please see the rsync and ssh_config pages for more informaiton.
-To force rsync and ssh to use ONLY a specified SSH key use: -o IdentitiesOnly=yes
-extraSSH options: -o IdentitiesOnly=yes
-gathering jobs...
-No rsync jobs found.  Please add a job to /Users/aaronciuffo/.automate_rsyncrc
-Would you like to interactively add a job?
-Y/n: y
+## `remotehost`: not required for local syncs that do not use ssh
+remotehost = <optional: ip or host name>
 
-Please give this job a descriptive name such as "Remote Host - LocalDirectory"
-jobName: ponies.horse - backup race stats
+## `sshkey`:not required for local syncs that do not use ssh
+sshkey = <optional: path to private ssh key>
 
-What is the *remote* username to use?
-user: jockey
+## `localpath`: required
+localpath = <local path to sync from -- mind the trailing `/`>
+# localpath = /Users/jbuck/Documents <-- this will sync the dir
+# localpath = /Users/jbuck/Documents/ <-- this will sync the contents only
 
-What is the hostname or IP address of the remote rsync host?
-server: ponies.horse
+## `remotepath`: required
+remotepath = <remote path to sync into -- mind the trailing `/`>
 
-What is the full path to the ssh key should be used with this server?
-If no key is to be used or only one key per server is used this can be blank
-If a specific key is used please set extraSSH=-o IdentitiesOnly=yes
-sshKey: /home/jockey/.ssh/id_rsa-ponies
+## `exclude`: optional
+exclude = <comma separated list of patterns to exclude from sync>
+# exclude = .DS_Store, data_base, /Downloads, /Applications
+```
+    
+### Example Configuration
+```
+[%base_config]
+# -a: (bsd) archive mode; same as -rlptgoD (no -H)
+# -z: (bsd) compress file data during the transfer
+rsync_options = -a -z
+# --delete-excluded: (bsd) also delete excluded files from dest dirs
+delete_options = --delete-excluded
 
-What is the full local path to be backedup?
-localPath: /home/jockey/race_stats/
+[%ssh_opts]
+# -o IdentitiesOnly=yes: force the use of a single key
+extrassh = -o IdentitiesOnly=yes
 
-What is the full remote path?
-If you you are using restricted rsync this path should be relative to the restricted path
-For more information about securing passwordless rsync jobs with rrsync please see
-https://ftp.samba.org/pub/unpacked/rsync/support/rrsync
-remotePath: /home/jockey/backup_stats
+[iMac->MediaServer - Music]
+# username at remote host
+user = media
 
-What should be excluded?
-Please see the rsync man page for more information on regular expressions and exclusions
-Format: "/path/to/Dir1", "*Virtual.Machines", "*dump", "\.swp"
-exclude: "*junk*", "/home/jockey/race_stats/depricated/"
-Done adding your job: ponies.horse - backup race stats
+# ip or network name of remote host
+remotehost = 192.168.1.9
 
-For more information on configuring SSH, rsync and this script please see instructions.txt
+# private ssh keyfile to use (this is only useful with the '-o IdentitiesOnly' option
+sshkey = /Users/myuser/.ssh/id_rsa-media_server_restricted_key
+
+# localpath to send
+localpath = /Users/myuser/Music/
+
+# remote path to use -- in this case a restricted rsync path
+# this path actually sits in '/home/media/MUSIC/' but is truncated by 
+# restricted rsync to show the last portion of the path
+# this prevents malicious or accidental damage outside of the MUSIC directory
+remotepath = /
+
+# patterns to exclude separated by a ','
+exclude = .AppleDouble, TV.*Shows, Music/Other, .DS_Store*
+    
+[local backup -> ColdBackup drive]
+# this is a local rsync using a drive mounted locally
+localpath = /Users/myuser/src
+remotepath = /Volumes/ColdBackup
+```
+
+
+```python
+%alias mdc /Users/aaronciuffo/bin/develtools/mdconvert README.ipynb
+%mdc
+```
+
+    [NbConvertApp] Converting notebook README.ipynb to markdown
+
