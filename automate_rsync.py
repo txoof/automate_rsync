@@ -2,7 +2,7 @@
 # coding: utf-8
 
 
-# In[17]:
+# In[1]:
 
 
 #get_ipython().run_line_magic('load_ext', 'autoreload')
@@ -11,10 +11,10 @@
 
 
 
-# In[18]:
+# In[3]:
 
 
-#get_ipython().run_line_magic('alias', 'nbc /Users/aaronciuffo/bin/develtools/nbconvert automate_rsync_v3.ipynb')
+#get_ipython().run_line_magic('alias', 'nbc /Users/aaronciuffo/bin/develtools/nbconvert automate_rsync.ipynb')
 #get_ipython().run_line_magic('nbc', '')
 
 
@@ -43,7 +43,7 @@ import argparse
 
 
 # CONSTANTS
-VERSION = '0.1.00'
+VERSION = '3.0.00-rc0'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
