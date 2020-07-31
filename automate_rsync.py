@@ -557,34 +557,3 @@ if __name__ == '__main__':
     job = main()
 
 
-
-
-
-parse_args()
-
-
-
-
-
-saved_argv = sys.argv
-
-
-
-
-
-sys.argv.pop()
-sys.argv.pop()
-
-
-
-
-
-sys.argv.append('-v')
-
-
-
-
-
-
-
-
