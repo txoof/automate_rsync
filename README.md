@@ -5,7 +5,7 @@ Simplify running complex rsync jobs through an .ini file.
 
 
 ## QUICK START
-Copy & paste the lines below into the terminal to setup automated, unattended rsync jobs in macOS. If you are at all uneasy about running scripts downloaded and excuted without review, **GOOD FOR YOU!** You can review the scripts by cloning this repo, or downloading this tar ball.
+Copy & paste the lines below into the terminal to setup automated, unattended rsync jobs in macOS. If you are at all uneasy about running scripts downloaded and excuted without review, **GOOD FOR YOU!** You can review the scripts by cloning this repo, or downloading [this tar ball](https://github.com/txoof/automate_rsync/raw/master/automate_rsync.tgz).
 1. Install automate_rsync system wide (only needs to be done once by an admin user
     * `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/txoof/automate_rsync/master/remote_install/system_install.sh)"`
     * `nano ~/.config/com.txoof.automate_rsync/automate_rsync.ini`
@@ -177,8 +177,3 @@ remotepath = /Volumes/ColdBackup
 
     [NbConvertApp] Converting notebook README.ipynb to markdown
 
-
-
-```python
-
-```
