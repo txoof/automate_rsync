@@ -84,17 +84,19 @@ extrassh = -o IdentitiesOnly=yes
 Each job must have a unique name
 Add an `=` to the job name to disable it: `[=Home Dir -> Backup Server]`
 ```
-[jobs]
-## `user`: not required for local syncs that do not use ssh
-user = <optional: remote username>
+[Job Title Goes Here]
+## `user`: optional -- not required for local syncs that do not use ssh
+user = <remote username>
+# user = jbuck
 
-## `remotehost`: not required for local syncs that do not use ssh
-remotehost = <optional: ip or host name>
+## `remotehost`: optional -- not required for local syncs that do not use ssh
+remotehost = <remote ip or host name>
+# remotehost = backupserver.local
 
-## `sshkey`:not required for local syncs that do not use ssh
+## `sshkey`: optional -- not required for local syncs that do not use ssh
 sshkey = <optional: path to private ssh key>
 
-## `localpath`: required
+## `localpath`: required 
 localpath = <local path to sync from -- mind the trailing `/`>
 # localpath = /Users/jbuck/Documents <-- this will sync the dir
 # localpath = /Users/jbuck/Documents/ <-- this will sync the contents only
@@ -105,15 +107,15 @@ remotepath = <remote path to sync into -- mind the trailing `/`>
 ## `exclude`: optional
 exclude = <comma separated list of patterns to exclude from sync>
 # exclude = .DS_Store, data_base, /Downloads, /Applications
-    
+
 ## `log_file`: optional
 log_file = <path to log file for this job - each job can have a different log file>
 # log_file = ~/jobs.log
 
-    
 ## `timeout`: optional
-timeout = <seconds before rsync job times out (default: None (no timeout))>
+timeout = <seconds before rsync job times out (default: 'None' (no timeout))>
 # timeout = 600
+# timeout = None
 
 ## `kill`: optional
 kill = <True/False - kill the job after the timeout expires (default: False)>
