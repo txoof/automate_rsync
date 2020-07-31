@@ -1,1 +1,18 @@
-/Users/aaronciuffo/Library/LaunchAgents/com.txoof.automatersync.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Disabled</key>
+	<false/>
+	<key>Label</key>
+	<string>com.txoof.automatersync</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>bash</string>
+		<string>-c</string>
+		<string>export LANG=en_US.UTF-8; /usr/local/bin/automate_rsync.py</string>
+	</array>
+	<key>StartInterval</key>
+	<integer>1800</integer>
+</dict>
+</plist>
