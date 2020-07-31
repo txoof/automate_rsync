@@ -2,7 +2,7 @@
 # coding: utf-8
 
 
-# In[1]:
+# In[17]:
 
 
 #get_ipython().run_line_magic('load_ext', 'autoreload')
@@ -11,7 +11,7 @@
 
 
 
-# In[16]:
+# In[18]:
 
 
 #get_ipython().system('/Users/aaronciuffo/bin/develtools/nbconvert automate_rsync.ipynb')
@@ -19,7 +19,7 @@
 
 
 
-# In[2]:
+# In[19]:
 
 
 import configparser
@@ -39,11 +39,11 @@ from datetime import datetime
 
 
 
-# In[3]:
+# In[20]:
 
 
 # CONSTANTS
-VERSION = '3.0.02-rc1'
+VERSION = '3.0.03-rc1'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
@@ -72,7 +72,7 @@ CONFIG_PATH = Path(f'~/.config/{DEVEL_NAME}.{APP_NAME}').expanduser().absolute()
 
 
 
-# In[4]:
+# In[21]:
 
 
 def sample_config():
@@ -160,7 +160,7 @@ exclude = .AppleDouble, .DS_Store, .git, .local, /Library, /Application*, /Music
 
 
 
-# In[5]:
+# In[22]:
 
 
 def parse_args():
@@ -175,7 +175,7 @@ def parse_args():
 
 
 
-# In[6]:
+# In[23]:
 
 
 def get_config(file):
@@ -199,7 +199,7 @@ def get_config(file):
 
 
 
-# In[7]:
+# In[24]:
 
 
 def parse_job(job):
@@ -215,7 +215,7 @@ def parse_job(job):
 
 
 
-# In[8]:
+# In[25]:
 
 
 def parse_config(config):
@@ -243,7 +243,7 @@ def parse_config(config):
 
 
 
-# In[9]:
+# In[26]:
 
 
 def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False, verbose=False):
@@ -338,7 +338,7 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
 
 
 
-# In[10]:
+# In[27]:
 
 
 class multi_line_string():
@@ -377,7 +377,7 @@ class multi_line_string():
 
 
 
-# In[14]:
+# In[28]:
 
 
 def main():    
@@ -559,7 +559,7 @@ def main():
 
 
 
-# In[15]:
+# In[29]:
 
 
 if __name__ == '__main__':
