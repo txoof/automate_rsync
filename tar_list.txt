@@ -1,0 +1,4 @@
+automate_rsync.py
+com.txoof.automatersync.plist
+install.sh
+README.md
