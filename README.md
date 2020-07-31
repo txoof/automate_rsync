@@ -34,7 +34,6 @@ When this script is run from the `terminal.app`, those privliges are likely alre
 * Provide full disk access to the `bash` binary
     * See these [instructions (12 March 2020)](https://www.tech-otaku.com/mac/manually-granting-applications-full-disk-access-macos-catalina/)
 
-
 To install and enable `automate_rsync` use the included `install.sh` script and `daemon_install.sh` script, or do the following manually:
 1. `$ cp automate_rsync.py /usr/local/bin/`
     * Provides system wide access to the binary
@@ -44,6 +43,24 @@ To install and enable `automate_rsync` use the included `install.sh` script and 
     * the default schedule to run is every 30 minutes (1800 seconds) see: `<key>StartInterval<key>`
 4. `$ launchctl load ~/Library/LaunchAgets/com.txoof.automatersync.plist`
     * Make launchd aware of the plist file
+
+
+### Diagnosing launchd issues
+Launchd does not offer great debugging tools. Jobs that fail to run will do so very quietly. If you are having trouble with automate_rsync, it is likely due to some problem with the environment under which it runs from launchd. The bash shell that is run by the daemon is an extremely stripped down version without your regular LANG and PATH environment variables. This can cause all sorts of odd behavior.
+
+Tips for debugging:
+* Double check that automate_rsync runs on the command line. If it fails under normal circumstances, you've got bigger problems.
+* Check in the `console.app` and search for 'com.txoof.automatersync' in the system.log section for some hints. 
+    * `abnormal code:` indicates the script terminated with an error:
+        * 1: general errors - could be just about anything
+        * 127: command not found - likely means that your python environment is broken
+    * Change the .plist file to match `<string>export LANG=en_US.UTF-8; /usr/local/bin/automate_rsync.py &gt;&gt; ~/plist.log</string>`
+        * this will redirect any error output to `~/plist.log` for further review
+    * Try adding the path to your rsync binary to your `automate_rsync.ini` file. 
+        * use `$ which rsync` to determine the path to your rsync executable
+        * add that path to your `automate_rsync.ini` file using `rsync_bin = /path/to/your/rsync` under the `[%base_config]` section
+
+
 
 
 ## Setup
@@ -179,3 +196,8 @@ remotepath = /Volumes/ColdBackup
 
     [NbConvertApp] Converting notebook README.ipynb to markdown
 
+
+
+```python
+
+```
