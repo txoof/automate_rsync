@@ -2,24 +2,10 @@
 # coding: utf-8
 
 
-# In[17]:
-
-
-#get_ipython().run_line_magic('load_ext', 'autoreload')
-#get_ipython().run_line_magic('autoreload', '2')
 
 
 
 
-# In[18]:
-
-
-#get_ipython().system('/Users/aaronciuffo/bin/develtools/nbconvert automate_rsync.ipynb')
-
-
-
-
-# In[19]:
 
 
 import configparser
@@ -39,17 +25,16 @@ from datetime import datetime
 
 
 
-# In[20]:
-
 
 # CONSTANTS
-VERSION = '3.0.03-rc1'
+VERSION = '3.0.04-rc2'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
 
 
-EXPECTED_BASE_KEYS = {'rsync_options': '',
+EXPECTED_BASE_KEYS = {'rsync_bin': None,
+                      'rsync_options': '',
                       'delete_options': '',
                       }
 
@@ -72,16 +57,15 @@ CONFIG_PATH = Path(f'~/.config/{DEVEL_NAME}.{APP_NAME}').expanduser().absolute()
 
 
 
-# In[21]:
-
 
 def sample_config():
     return '''[%base_config]
-## options to use for all rsync jobs
+## `rsync_bin`: optional -- path to rsync bin; useful if not in $PATH
+rsync_bin = None
+## `rsync_options`: optional -- options to use for all rsync jobs
 rsync_options = -a -z
-## deletion strategies to use (leave blank for none)
+## `delete_options`: optional -- deletion strategies to use (leave blank for none)
 delete_options = --delete-excluded
-# 
 
 [%ssh_opts]
 ## extra options to pass to the ssh module
@@ -94,46 +78,46 @@ extrassh = -o IdentitiesOnly=yes
 ## each 'job' must include at minimum the keys "localpath" and "remotepath"
 ## other keys are optional (see the example below)
 ## add an `=` to the beginning of a job to disable it
-
-
 ## copy this TEMPLATE and remove the `=` to label each job
 [=TEMPLATE]
-## not required for local syncs that do not use ssh
-user = <optional: remote username>
+## `user`: optional -- not required for local syncs that do not use ssh
+user = <remote username>
+# user = jbuck
 
-## not required for local syncs that do not use ssh
-remotehost = <optional: ip or host name>
+## `remotehost`: optional -- not required for local syncs that do not use ssh
+remotehost = <remote ip or host name>
+# remotehost = backupserver.local
 
-## not required for local syncs that do not use ssh
+## `sshkey`: optional -- not required for local syncs that do not use ssh
 sshkey = <optional: path to private ssh key>
 
-## required
+## `localpath`: required 
 localpath = <local path to sync from -- mind the trailing `/`>
 # localpath = /Users/jbuck/Documents <-- this will sync the dir
 # localpath = /Users/jbuck/Documents/ <-- this will sync the contents only
 
-## required
+## `remotepath`: required
 remotepath = <remote path to sync into -- mind the trailing `/`>
 
-## optional
-exclude = <comma separated list of patterns to exclude from sync (default: None)>
+## `exclude`: optional
+exclude = <comma separated list of patterns to exclude from sync>
 # exclude = .DS_Store, data_base, /Downloads, /Applications
 
-## optional 
-log_file = <path to log file for this job (default: /dev/null)>
-# log_file = ~/Documents.log
+## `log_file`: optional
+log_file = <path to log file for this job - each job can have a different log file>
+# log_file = ~/jobs.log
 
-## optional
-timeout = <seconds before rsync job times out (default: None (no timeout))>
+## `timeout`: optional
+timeout = <seconds before rsync job times out (default: 'None' (no timeout))>
 # timeout = 600
+# timeout = None
 
-## optional
+## `kill`: optional
 kill = <True/False - kill the job after the timeout expires (default: False)>
 # kill = False
 
-## optional
-## when max size is reached, the log will be rolled over to log_file.1
-max_log = <max log size in bytes (1048576 bytes == 1 megabyte) (default: 0 no limit)>
+## `max_log`: optional
+max_log = <max log size in bytes before rollover (1048576 bytes == 1 megabyte) (default: 0 no limit)>
 # max_log = 5242880
 
 
@@ -155,12 +139,15 @@ localpath = /Users/jbuck/Documents
 ## Restricted rsync exposes only exposes a portion of the remote file system
 ## that portion is treated as the "root" of the file system
 remotepath = /iMac.backups/
-exclude = .AppleDouble, .DS_Store, .git, .local, /Library, /Application*, /Music'''
+exclude = .AppleDouble, .DS_Store, .git, .local, /Library, /Application*, /Music
+timeout = 600
+kill = False
+log_file = ~/documents_rsync.log
+# 5 mB = 52428800 bytes
+max_log = 52428800'''
 
 
 
-
-# In[22]:
 
 
 def parse_args():
@@ -174,8 +161,6 @@ def parse_args():
 
 
 
-
-# In[23]:
 
 
 def get_config(file):
@@ -199,8 +184,6 @@ def get_config(file):
 
 
 
-# In[24]:
-
 
 def parse_job(job):
     expected_keys=EXPECTED_JOB_KEYS
@@ -214,8 +197,6 @@ def parse_job(job):
 
 
 
-
-# In[25]:
 
 
 def parse_config(config):
@@ -243,8 +224,6 @@ def parse_config(config):
 
 
 
-# In[26]:
-
 
 def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False, verbose=False):
     '''build an rsync from ini file
@@ -268,11 +247,17 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
     tempdir = Path(tempdir)
     
     # get the rsync binary path
-    try:
-        stream = os.popen('which rsync')
-        rsync_bin = stream.read()
-    except Exception as e:
-        do_exit(e, 1)
+    if base_config['rsync_bin']:
+        rsync_bin = base_config['rsync_bin']
+    else:
+        try:
+            stream = os.popen('which rsync')
+            rsync_bin = stream.read()
+        except Exception as e:
+            do_exit(e, 1)
+        
+    if not rsync_bin:
+        do_exit(f'could not locate rsync binary in `$PATH`\nconsider adding:\n"rsync_bin=/path/to/rsync"\n to [%base_config] section of {CONFIG_PATH}')
     
     # add the binary
     rsync_command.append(rsync_bin)
@@ -338,8 +323,6 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
 
 
 
-# In[27]:
-
 
 class multi_line_string():
     '''multi-line string object 
@@ -377,11 +360,20 @@ class multi_line_string():
 
 
 
-# In[28]:
+
+def do_exit(e, exit_status=99):
+    '''try to handle exits'''
+    print(f'{APP_NAME} v{VERSION}')
+    print(e)
+    sys.exit(exit_status)
+
+
+
 
 
 def main():    
     def do_exit(e, exit_status=99):
+        # redefine locally to also handle cleanup of temp dirs
         '''try to handle exits and cleanup'''
         cleanup()
         print(f'{APP_NAME} v{VERSION}')
@@ -397,13 +389,14 @@ def main():
             except Exception as e:
                 print(e)
                 exit(2)
-                
+
         if log_output:
             try:
                 log_output.close()
             except Exception as e:
                 print(e)
                 exit(2)
+            
     
     # declare these so cleanup() can function everywhere
     tempdir = None
@@ -559,8 +552,6 @@ def main():
 
 
 
-# In[29]:
-
 
 if __name__ == '__main__':
     job = main()
@@ -568,15 +559,30 @@ if __name__ == '__main__':
 
 
 
-# In[12]:
-
 
 parse_args()
 
 
 
 
-# In[ ]:
+
+saved_argv = sys.argv
+
+
+
+
+
+sys.argv.pop()
+sys.argv.pop()
+
+
+
+
+
+sys.argv.append('-v')
+
+
+
 
 
 
