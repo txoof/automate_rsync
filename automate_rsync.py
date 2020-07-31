@@ -27,7 +27,7 @@ from datetime import datetime
 
 
 # CONSTANTS
-VERSION = '3.0.05-rc3'
+VERSION = '3.0.06-rc4'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
@@ -246,21 +246,31 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
     ssh_command = ''
     tempdir = Path(tempdir)
     
+    
+    
+    
     # get the rsync binary path
-    if base_config['rsync_bin']:
-        rsync_bin = base_config['rsync_bin']
+    if base_config['rsync_bin'] == 'None' or not base_config['rsync_bin']:
+        rsync_bin = None
     else:
+        rsync_bin = Path(base_config['rsync_bin'])
+            
+    if not rsync_bin:
         try:
             stream = os.popen('which rsync')
-            rsync_bin = stream.read()
+            rsync_bin = Path(stream.read().rstrip('\n'))
         except Exception as e:
             do_exit(e, 1)
-        
+    
+    
     if not rsync_bin:
         do_exit(f'could not locate rsync binary in `$PATH`\nconsider adding:\n"rsync_bin=/path/to/rsync"\n to [%base_config] section of {CONFIG_PATH}')
+        
+    if not rsync_bin.is_file():
+        do_exit(f'{rsync_bin} does not appear to exist.\nconsider udating:\n"rsync_bin = /path/to/rsync"\n to [%base_config] section of {CONFIG_PATH}')
     
     # add the binary
-    rsync_command.append(rsync_bin)
+    rsync_command.append(rsync_bin.as_posix())
     # add the options from the ini file
     rsync_command.append(base_config['rsync_options'])
     
@@ -555,5 +565,11 @@ def main():
 
 if __name__ == '__main__':
     job = main()
+
+
+
+
+
+
 
 
