@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: utf-8
 
 
@@ -11,11 +11,10 @@
 
 
 
-# In[7]:
+# In[16]:
 
 
-#get_ipython().run_line_magic('alias', 'nbc /Users/aaronciuffo/bin/develtools/nbconvert automate_rsync.ipynb')
-#get_ipython().run_line_magic('nbc', '')
+#get_ipython().system('/Users/aaronciuffo/bin/develtools/nbconvert automate_rsync.ipynb')
 
 
 
@@ -35,6 +34,7 @@ import re
 import shlex
 import subprocess
 import argparse
+from datetime import datetime
 
 
 
@@ -43,21 +43,27 @@ import argparse
 
 
 # CONSTANTS
-VERSION = '3.0.00-rc0'
+VERSION = '3.0.02-rc1'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
 
 
 EXPECTED_BASE_KEYS = {'rsync_options': '',
-                      'delete_options': ''}
+                      'delete_options': '',
+                      }
 
 EXPECTED_JOB_KEYS = {'user': None,
                      'remotehost': None,
                      'sshkey': None,
                      'localpath': None,
                      'remotepath': None,
-                     'exclude': []}
+                     'exclude': [],
+                     'log_file': '/dev/null',
+                     'max_log': 0,
+                     'timeout': None,
+                     'kill': False                     
+                    }
 
 EXPECTED_SSH_KEYS = {'extrassh': ''}
 
@@ -75,6 +81,7 @@ def sample_config():
 rsync_options = -a -z
 ## deletion strategies to use (leave blank for none)
 delete_options = --delete-excluded
+# 
 
 [%ssh_opts]
 ## extra options to pass to the ssh module
@@ -109,8 +116,26 @@ localpath = <local path to sync from -- mind the trailing `/`>
 remotepath = <remote path to sync into -- mind the trailing `/`>
 
 ## optional
-exclude = <comma separated list of patterns to exclude from sync>
+exclude = <comma separated list of patterns to exclude from sync (default: None)>
 # exclude = .DS_Store, data_base, /Downloads, /Applications
+
+## optional 
+log_file = <path to log file for this job (default: /dev/null)>
+# log_file = ~/Documents.log
+
+## optional
+timeout = <seconds before rsync job times out (default: None (no timeout))>
+# timeout = 600
+
+## optional
+kill = <True/False - kill the job after the timeout expires (default: False)>
+# kill = False
+
+## optional
+## when max size is reached, the log will be rolled over to log_file.1
+max_log = <max log size in bytes (1048576 bytes == 1 megabyte) (default: 0 no limit)>
+# max_log = 5242880
+
 
 ## Local sync example (disabled)
 ## sync the entire directory `foo` into `ColdStorage`
@@ -140,11 +165,12 @@ exclude = .AppleDouble, .DS_Store, .git, .local, /Library, /Application*, /Music
 
 def parse_args():
     parser = argparse.ArgumentParser(description=f'{APP_NAME} v{VERSION} -- run complex rsync jobs from an ini file')
-    parser.add_argument('-v', dest='verbose', action='store_true', default=False, help='enable verbose output')
-    parser.add_argument('-d', dest='dry_run', action='store_true', default=False, help='set rsync --dry-run')
-    args, unknown = parser.parse_known_args()
+    parser.add_argument('-v', '--verbose', action='count', default=0, help='enable verbose output -- can be added multiple times')
+    parser.add_argument('-d', '--dry_run', dest='dry_run', action='store_true', default=False, help='set rsync --dry-run')
+    parser.add_argument('-V', '--version', dest='version', action='store_true', default=False, help='display version and exit')
+    args, unknown_args = parser.parse_known_args()
     
-    return args
+    return args, unknown_args
 
 
 
@@ -193,6 +219,8 @@ def parse_job(job):
 
 
 def parse_config(config):
+    '''build dictionary from configparser section using expected key/values'''
+    
     expected_base_keys = EXPECTED_BASE_KEYS
     expected_ssh_keys = EXPECTED_SSH_KEYS
     
@@ -228,7 +256,7 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
         ssh_opts(`dict`): ssh_opts from ini
         tempdir(`Path`): path to temporary directory for exclude files
         dry_run(`bool`): add `--dry-run` to rsync command for testing
-        verbose(`bool`): add `-v` to rsync command for debugging
+        verbose(`int`): add n `-v` to rsync command for increased debugging
     
     Returns:
         string -- rsync command'''
@@ -256,7 +284,7 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
         rsync_command.append('--dry-run')
         
     if verbose:
-        rsync_command.append('-v')
+        rsync_command.append('-'+'v'*verbose)
     
     rsync_command.append(base_config['delete_options'])
     
@@ -272,8 +300,11 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
     except Exception as e:
         do_exit(f'{e} while processing {name}', 2)
     
+
     if job['exclude']:
+        # read the exclude string and split into list
         exclude_list = [x.strip() for x in job['exclude'].split(',')]
+        # write list out to file
         for l in exclude_list:
             exclude_file.write(f'{l}\n')
 
@@ -289,11 +320,13 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
     else:
         remotepath = job['remotepath']    
     
+    # build a `user@remote.host:/path/` string if a user was specified
     if job['user']:
         remotepath = f"{job['user']}@{job['remotehost']}:{remotepath}"
     
     rsync_command.append(remotepath)
     
+#     rsync_command.append(f">> {job['log_file']} 2>&1")
     
     return shlex.split(' '.join(rsync_command))
 #     return rsync_command
@@ -305,16 +338,49 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
 
 
 
-# In[13]:
+# In[10]:
 
 
-def main():
-    args = parse_args()
+class multi_line_string():
+    '''multi-line string object 
     
-    dry_run = args.dry_run
-    verbose = args.verbose
+    each time  multi_line_string.string is set equal to a string, it is added to 
+    the existing string with a new line character
     
+    Properties:
+        string(`str`): string'''
+
+    def __init__(self, s=''):
+        self._string = ''
+        self.append(s)
     
+    def __str__(self):
+        return str(self.string)
+    
+    def __repr__(self):
+        return(str(self.string))
+    
+    @property
+    def string(self):
+        return self._string
+    
+    @string.setter
+    def string(self, s):
+        self._string = s
+    
+    def append(self, s):
+        self._string = self._string + s + '\n'
+    
+    def clear(self):
+        self._string = ''
+
+
+
+
+# In[14]:
+
+
+def main():    
     def do_exit(e, exit_status=99):
         '''try to handle exits and cleanup'''
         cleanup()
@@ -323,72 +389,196 @@ def main():
         sys.exit(exit_status)
 
     def cleanup():
-        try:
-            shutil.rmtree(tempdir)
-        except FileNotFoundError:
-            pass
-        except Exception as e:
-            print(e)
-            exit(2)
+        if tempdir:
+            try:
+                shutil.rmtree(tempdir)
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                print(e)
+                exit(2)
+                
+        if log_output:
+            try:
+                log_output.close()
+            except Exception as e:
+                print(e)
+                exit(2)
     
-    tempdir = ''
+    # declare these so cleanup() can function everywhere
+    tempdir = None
+    log_output = None     
+
+    # get the command line arguments
+    args, unknown_args = parse_args()
+
+    if len(unknown_args) > 0:
+        do_exit(f'Unknown arguments: {unknown_args}', 1)
+    
+    # print version, exit
+    if args.version:
+        do_exit('', 0)
+    
+    if args.verbose > 0:
+        verbose = args.verbose
+    else:
+        verbose = False   
+   
+    # create tempdir for exclude files
     try:
         tempdir = tempfile.mkdtemp()
     except Exception as e:
         do_exit(e, 2)            
-            
+    
+    # build configuration
     config_file = Path(CONFIG_PATH)/CONFIG_FILE
-    # config = get_config(Path(default_cfg_name).absolute())
     config = get_config(config_file)
     base_config, ssh_opts = parse_config(config)
 
-
+    # get the list of jobs
     jobs = []
     for section in config.sections():
+        # split out the configuration from the jobs
+        #  ignore any job that begins with a literal '='
         if not (section.startswith('%') or section.startswith('=')):
             jobs.append(section)
-
-    if len(jobs) < 1:
-        do_exit(f'ERROR: no jobs are defined.\nEdit {config_file}', 1)
-
-    if verbose:
-        print(f'Found {len(jobs)} job(s):')
-        for job in jobs:
-            print(f'\t{job}')
     
+    if len(jobs) < 1:
+        do_exit(f'ERROR: no jobs are defined.\nEdit {config_file} to create jobs', 1)
+
     parsed_jobs = {}
+    # sanitize the jobs, build job dictionary with the appropriate keys
     for job in jobs:
         parsed_jobs[job] = (parse_job(config[job]))
 
+    # build rsync commands as lists using job configuration
     rsync_commands = {}
     for job in parsed_jobs:
         rsync_commands[job] = build_rsync_command(name=job, job=parsed_jobs[job], base_config=base_config, ssh_opts=ssh_opts, 
-                            tempdir=tempdir, dry_run=dry_run, verbose=verbose)
+                            tempdir=tempdir, dry_run=args.dry_run, verbose=verbose)
+    
+    
+    # run the jobs
+    for job, command in rsync_commands.items():
+        collected_output = multi_line_string('\n')
+        collected_output.append('-='*30)
+        collected_output.append(f'{APP_NAME} v{VERSION}')
+        collected_output.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))        
+        collected_output.append(f'running job: [{job}]')
+        collected_output.append(f"\ncommand: {' '.join(command)}\n")
 
-
-    for job in rsync_commands:
-        print(f'Running job: [{job}]')
+        
+        # set the output file for the log
+        log_file = Path('/dev/null').absolute()
+        
+        try:
+            log_file = Path(parsed_jobs[job]['log_file']).expanduser().absolute()
+        except KeyError:
+            pass
+        
+        try:
+            # open with buffering = 1 to ensure lines are written in the correct order
+            # Without this option the header may be written after the rsync information 
+            log_output = open(log_file, 'a', buffering=1)
+        except OSError as e:
+            do_exit(f'error opening log file ({log_file}): {e}')
+            
+        # log progress thus far
+        log_output.write(str(collected_output))
         if verbose:
-            print(' '.join(rsync_commands[job]))
-    #     stream = os.popen(command)
-    #     print(f'this is the stream: {stream.read()}')
-
-        process = subprocess.run(rsync_commands[job], 
-                                 stdout=subprocess.PIPE,
-                                 universal_newlines=True
-                                )
-        output = process.stdout
+            print(collected_output)
+            
+        # clear the collected output
+        collected_output.clear()
+        
+        # get the timeout and kill values
+        timeout = parsed_jobs[job]['timeout']
+        if timeout == 'None':
+            timeout = None
+        else:
+            try:
+                 timeout = int(timeout)            
+            except TypeError:
+                do_exit(f'TypeError in {job}: timeout = {timeout} -- expected `integer` or `None`', 2)
+        
+        kill = parsed_jobs[job]['kill']
+        
+        if kill == 'False':
+            kill = False
+        elif kill == 'True':
+            kill = True
+        else:
+            do_exit(f'TypeError in {job}: kill = {kill} -- expected `True/False`', 2)
+            
+        # run the command
+        process = subprocess.Popen(command, 
+                                 stderr=subprocess.STDOUT, 
+                                 stdout=log_output, 
+                                 universal_newlines=True)
+        
+        # check on the status
+        try:
+            out = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            if kill:
+                process.kill()
+                collected_output.append(f'timeout for job {job} expired, process was killed')
+            else:
+                collected_output.append(f'timeout for job {job} expired, process was not killed; continuing')
+        
+        max_log = parsed_jobs[job]['max_log']
+        
+        try:
+            max_log = int(max_log)
+        except TypeError:
+            do_exit(f'TypeError in {job}: max_log = {max_log} -- expected `integer`', 2)
+        
+        if log_file.stat().st_size > max_log:
+            log_archive = Path(str(log_file)+'.1')
+            try:
+                shutil.move(log_file, log_archive)
+            except (FileNotFoundError, OSError):
+                print(f'could not move {log_file} -> {log_archive}')
+            
+            
+        
+        
+        
+        collected_output.append(f"completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        collected_output.append(f'[{job}] done')
+        
         if verbose:
-            print(output.strip())
-            print('done')
+            print(collected_output)
+        log_output.write(str(collected_output)) 
+        
+        log_output.close()
+
+
+    cleanup()
 
 
 
 
-# In[14]:
+# In[15]:
 
 
 if __name__ == '__main__':
-    main()
+    job = main()
+
+
+
+
+# In[12]:
+
+
+parse_args()
+
+
+
+
+# In[ ]:
+
+
+
 
 
