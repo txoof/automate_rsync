@@ -201,14 +201,14 @@ remotepath = /Volumes/ColdBackup
     # sync photos from an image store on a rrsync host
 direction = remote-local
 username = photo_user
-    remotehost = image-store.local
-    sshkey = /Users/myuser/.ssh/id_rsa-image_store_restricted_key
-    localpath = /Users/myuser/Documents/Pictures/image-store
-    remotepath = /stock_photos
-    logfile = ~/image_store.log
-    max_log = 2000000
-    timeout = 12000
-    kill = False
+remotehost = image-store.local
+sshkey = /Users/myuser/.ssh/id_rsa-image_store_restricted_key
+localpath = /Users/myuser/Documents/Pictures/image-store
+remotepath = /stock_photos
+logfile = ~/image_store.log
+max_log = 2000000
+timeout = 12000
+kill = False
 ```
 
 
