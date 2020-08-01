@@ -106,8 +106,8 @@ Add an `=` to the job name to disable it: `[=Home Dir -> Backup Server]`
 ## this option controls the direction of the sync local-remote
 ## local-remote (default) rsyncs FROM the LOCAL computer to a REMOTE computer
 ## remote-local rsyncs FROM remote computer to LOCAL computer
-direction: <direction of sync from: local-remote or from: remote-local>
-# direction: local-remote
+direction = <direction of sync from: local-remote or from: remote-local>
+# direction = local-remote
 
 ## `user`: optional -- not required for local syncs that do not use ssh
 user = <remote username>
@@ -219,3 +219,8 @@ username = photo_user
 
     [NbConvertApp] Converting notebook README.ipynb to markdown
 
+
+
+```python
+
+```

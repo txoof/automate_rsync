@@ -27,7 +27,7 @@ from datetime import datetime
 
 
 # CONSTANTS
-VERSION = '3.0.08-beta'
+VERSION = '3.0.09-beta'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
@@ -82,8 +82,8 @@ extrassh = -o IdentitiesOnly=yes
 ## copy this TEMPLATE and remove the `=` to label each job
 [=TEMPLATE]
 ## `direction`: optional -- not required (defaults to local-remote)
-direction: <direction of sync from: local-remote or from: remote-local>
-# direction: local-remote
+direction = <direction of sync from: local-remote or from: remote-local>
+# direction = local-remote
 ## `user`: optional -- not required for local syncs that do not use ssh
 user = <remote username>
 # user = jbuck
