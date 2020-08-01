@@ -99,7 +99,7 @@ extrassh = -o IdentitiesOnly=yes
 
 #### Individual Jobs 
 Each job must have a unique name
-Add an `=` to the job name to disable it: `[=Home Dir -> Backup Server]`
+Add an `#` to the job name to disable it: `[#Home Dir -> Backup Server]`
 ```
 [Job Title Goes Here]
 ## `direction`: optional -- not required (defaults to local-remote)
