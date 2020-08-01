@@ -102,6 +102,13 @@ Each job must have a unique name
 Add an `=` to the job name to disable it: `[=Home Dir -> Backup Server]`
 ```
 [Job Title Goes Here]
+## `direction`: optional -- not required (defaults to local-remote)
+## this option controls the direction of the sync local-remote
+## local-remote (default) rsyncs FROM the LOCAL computer to a REMOTE computer
+## remote-local rsyncs FROM remote computer to LOCAL computer
+direction: <direction of sync from: local-remote or from: remote-local>
+# direction: local-remote
+
 ## `user`: optional -- not required for local syncs that do not use ssh
 user = <remote username>
 # user = jbuck
@@ -186,6 +193,20 @@ kill = False
 # this is a local rsync using a drive mounted locally
 localpath = /Users/myuser/src
 remotepath = /Volumes/ColdBackup
+    
+    
+[image_store -> my iMac]
+    # sync photos from an image store on a rrsync host
+direction = remote-local
+username = photo_user
+    remotehost = image-store.local
+    sshkey = /Users/myuser/.ssh/id_rsa-image_store_restricted_key
+    localpath = /Users/myuser/Documents/Pictures/image-store
+    remotepath = /stock_photos
+    logfile = ~/image_store.log
+    max_log = 2000000
+    timeout = 12000
+    kill = False
 ```
 
 
@@ -196,8 +217,3 @@ remotepath = /Volumes/ColdBackup
 
     [NbConvertApp] Converting notebook README.ipynb to markdown
 
-
-
-```python
-
-```
