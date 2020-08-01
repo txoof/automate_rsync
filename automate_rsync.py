@@ -27,7 +27,7 @@ from datetime import datetime
 
 
 # CONSTANTS
-VERSION = '3.0.06-rc4'
+VERSION = '3.0.08-beta'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
@@ -38,7 +38,8 @@ EXPECTED_BASE_KEYS = {'rsync_bin': None,
                       'delete_options': '',
                       }
 
-EXPECTED_JOB_KEYS = {'user': None,
+EXPECTED_JOB_KEYS = {'direction': 'local-remote',
+                     'user': None,
                      'remotehost': None,
                      'sshkey': None,
                      'localpath': None,
@@ -47,7 +48,7 @@ EXPECTED_JOB_KEYS = {'user': None,
                      'log_file': '/dev/null',
                      'max_log': 0,
                      'timeout': None,
-                     'kill': False                     
+                     'kill': False,
                     }
 
 EXPECTED_SSH_KEYS = {'extrassh': ''}
@@ -80,6 +81,9 @@ extrassh = -o IdentitiesOnly=yes
 ## add an `=` to the beginning of a job to disable it
 ## copy this TEMPLATE and remove the `=` to label each job
 [=TEMPLATE]
+## `direction`: optional -- not required (defaults to local-remote)
+direction: <direction of sync from: local-remote or from: remote-local>
+# direction: local-remote
 ## `user`: optional -- not required for local syncs that do not use ssh
 user = <remote username>
 # user = jbuck
@@ -95,6 +99,8 @@ sshkey = <optional: path to private ssh key>
 localpath = <local path to sync from -- mind the trailing `/`>
 # localpath = /Users/jbuck/Documents <-- this will sync the dir
 # localpath = /Users/jbuck/Documents/ <-- this will sync the contents only
+## be sure to escape spaces in path names!
+# localpath = /Users/jbuck/path\ with/lots\ of/spaces
 
 ## `remotepath`: required
 remotepath = <remote path to sync into -- mind the trailing `/`>
@@ -248,7 +254,6 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
     
     
     
-    
     # get the rsync binary path
     if base_config['rsync_bin'] == 'None' or not base_config['rsync_bin']:
         rsync_bin = None
@@ -261,7 +266,6 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
             rsync_bin = Path(stream.read().rstrip('\n'))
         except Exception as e:
             do_exit(e, 1)
-    
     
     if not rsync_bin:
         do_exit(f'could not locate rsync binary in `$PATH`\nconsider adding:\n"rsync_bin=/path/to/rsync"\n to [%base_config] section of {CONFIG_PATH}')
@@ -304,25 +308,34 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
             exclude_file.write(f'{l}\n')
 
         rsync_command.append(f'--exclude-from={tempdir/name}')
-    
+
     if not job['localpath']:
         do_exit(f'no localpath specified for job: {name}')
     
-    rsync_command.append(job['localpath'])
+#     rsync_command.append(job['localpath'])
+    localpath = job['localpath']
+    # add dobule quotes to protect spaces in filenames
+    localpath = f'\"{localpath}\"'
     
     if not job['remotepath']:
         do_exit(f'no remote path specified for job {name}')
     else:
         remotepath = job['remotepath']    
+        # add double quotes to protect spaces in filenames
+        remotepath = f'\"{remotepath}\"'
     
     # build a `user@remote.host:/path/` string if a user was specified
     if job['user']:
         remotepath = f"{job['user']}@{job['remotehost']}:{remotepath}"
     
-    rsync_command.append(remotepath)
+    if job['direction'] == 'remote-local':
+        rsync_command.append(remotepath)
+        rsync_command.append(localpath)
+    else:
+        rsync_command.append(localpath)
+        rsync_command.append(remotepath)
     
-#     rsync_command.append(f">> {job['log_file']} 2>&1")
-    
+#     set_trace()
     return shlex.split(' '.join(rsync_command))
 #     return rsync_command
     
@@ -457,8 +470,10 @@ def main():
     # build rsync commands as lists using job configuration
     rsync_commands = {}
     for job in parsed_jobs:
+#         set_trace()
         rsync_commands[job] = build_rsync_command(name=job, job=parsed_jobs[job], base_config=base_config, ssh_opts=ssh_opts, 
                             tempdir=tempdir, dry_run=args.dry_run, verbose=verbose)
+
     
     
     # run the jobs
@@ -555,7 +570,8 @@ def main():
         log_output.write(str(collected_output)) 
         
         log_output.close()
-
+    
+#     set_trace()
 
     cleanup()
 
@@ -565,6 +581,43 @@ def main():
 
 if __name__ == '__main__':
     job = main()
+
+
+
+
+
+# sys_args_initial = sys.argv
+# sys.argv.clear()
+
+
+
+
+
+# sys.argv.extend(['-v', '-d'])
+
+
+
+
+
+# sys.argv
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# from IPython.core.debugger import set_trace
 
 
 
