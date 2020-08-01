@@ -79,8 +79,8 @@ extrassh = -o IdentitiesOnly=yes
 ## each 'job' must include at minimum the keys "localpath" and "remotepath"
 ## other keys are optional (see the example below)
 ## add an `=` to the beginning of a job to disable it
-## copy this TEMPLATE and remove the `=` to label each job
-[=TEMPLATE]
+## copy this TEMPLATE and remove the `#` to label each job
+[#TEMPLATE]
 ## `direction`: optional -- not required (defaults to local-remote)
 direction = <direction of sync from: local-remote or from: remote-local>
 # direction = local-remote
@@ -129,14 +129,14 @@ max_log = <max log size in bytes before rollover (1048576 bytes == 1 megabyte) (
 
 ## Local sync example (disabled)
 ## sync the entire directory `foo` into `ColdStorage`
-[=Foo -> Bar Local Sync]
+[#Foo -> Bar Local Sync]
 localpath = /Users/jbuck/Documents/foo
 remotepath = /Volumes/ColdStorage/
 
 
 ## Remote sync over ssh with specific ssh key (disabled)
 ## this is particularly useful when using restricted rsync at the remote end
-[=iMac JBuck -> Backup Host]
+[#iMac JBuck -> Backup Host]
 user = jbuck
 remotehost = backups.local
 sshkey = /Users/jbuck/.ssh/id_rsa-backups
@@ -456,7 +456,7 @@ def main():
     for section in config.sections():
         # split out the configuration from the jobs
         #  ignore any job that begins with a literal '='
-        if not (section.startswith('%') or section.startswith('=')):
+        if not (section.startswith('%') or section.startswith('#')):
             jobs.append(section)
     
     if len(jobs) < 1:
