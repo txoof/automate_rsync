@@ -120,10 +120,12 @@ remotehost = <remote ip or host name>
 ## `sshkey`: optional -- not required for local syncs that do not use ssh
 sshkey = <optional: path to private ssh key>
 
-## `localpath`: required 
+# `localpath`: required 
 localpath = <local path to sync from -- mind the trailing `/`>
 # localpath = /Users/jbuck/Documents <-- this will sync the dir
 # localpath = /Users/jbuck/Documents/ <-- this will sync the contents only
+## be sure to escape spaces in path names!
+# localpath = /Users/jbuck/path\ with/lots\ of/spaces
 
 ## `remotepath`: required
 remotepath = <remote path to sync into -- mind the trailing `/`>
