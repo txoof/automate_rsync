@@ -34,11 +34,14 @@ CONFIG_FILE = f'{APP_NAME}.ini'
 
 
 EXPECTED_BASE_KEYS = {'rsync_bin': None,
-                      'rsync_options': '',
-                      'delete_options': '',
+                      'global_rsync': '',
+#                       'rsync_options': '',
+#                       'delete_options': '',
                       }
 
 EXPECTED_JOB_KEYS = {'direction': 'local-remote',
+                     'rsync_options': '',
+                     'ssh_options': '',
                      'user': None,
                      'remotehost': None,
                      'sshkey': None,
@@ -51,7 +54,9 @@ EXPECTED_JOB_KEYS = {'direction': 'local-remote',
                      'kill': False,
                     }
 
-EXPECTED_SSH_KEYS = {'extrassh': ''}
+# EXPECTED_SSH_KEYS = {
+#                      'extrassh': ''
+#                     }
 
 CONFIG_PATH = Path(f'~/.config/{DEVEL_NAME}.{APP_NAME}').expanduser().absolute()
 
@@ -182,8 +187,10 @@ def get_config(file):
             do_exit(e, 2)
 
     config = configparser.ConfigParser()
-        
-    config.read(file)
+    try:  
+        config.read(file)
+    except Exception as e:
+        do_exit(f'Error reading config file: {file}\n{e}')
     
     return config
 
@@ -196,10 +203,45 @@ def parse_job(job):
     parsed_job = {}
     for key in expected_keys:
         try:
-            parsed_job[key] = job[key]
+            parsed_job[key] = normalize_ini_key(job[key])
         except KeyError:
             parsed_job[key] = expected_keys[key]
+
     return parsed_job 
+
+
+
+
+
+def normalize_ini_key(string):
+    '''attempt to normalize values for by converting strings into boolean, or None for:
+        'True', 'False', 'None'
+        
+    Args:
+        value(`str`): value containing true, false, yes, no, none
+    
+    Raises:
+        TypeError if value is not of type `str`
+    
+    Returns:
+        bool or None'''
+    
+    if not isinstance(string, str):
+        raise TypeError(f'{value} is not type `str`')
+    
+    true = ['true', 'yes', 'ok', '1']
+    false = ['false', 'no', '0']
+    none = ['none']
+    
+    values_dict = {True: true, False: false, None: none}
+    ret_val = string
+    
+    for key, value in values_dict.items():
+        if string.lower() in value:
+            ret_val = key
+            break
+    
+    return ret_val
 
 
 
@@ -209,36 +251,36 @@ def parse_config(config):
     '''build dictionary from configparser section using expected key/values'''
     
     expected_base_keys = EXPECTED_BASE_KEYS
-    expected_ssh_keys = EXPECTED_SSH_KEYS
+#     expected_ssh_keys = EXPECTED_SSH_KEYS
     
     base_config = {}
-    ssh_opts = {}
-    
+#     ssh_opts = {}
+        
     for key in expected_base_keys:
         try:
-            base_config[key] = config['%base_config'][key]
+            base_config[key] = normalize_ini_key(config['%base_config'][key])
         except KeyError:
             base_config[key] = expected_base_keys[key]
     
-    for key in expected_ssh_keys:
-        try:
-            ssh_opts[key] = config['%ssh_opts'][key]
-        except KeyError:
-            ssh_opts[key] = expected_ssh_keys[key]
-    return (base_config, ssh_opts)
+#     for key in expected_ssh_keys:
+#         try:
+#             ssh_opts[key] = normalize_ini_key(config['%ssh_opts'][key])
+#         except KeyError:
+#             ssh_opts[key] = expected_ssh_keys[key]
+#     return (base_config, ssh_opts)
+    return (base_config)
 
 
 
 
 
-def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False, verbose=False):
+def build_rsync_command(name, job, base_config, tempdir, dry_run=False, verbose=False):
     '''build an rsync from ini file
     
     Args:
         name(`str`): name of the job -- used for identifying exclude file
         job(`dict`): individual job from ini 
         base_config(`dict`): base_config from ini
-        ssh_opts(`dict`): ssh_opts from ini
         tempdir(`Path`): path to temporary directory for exclude files
         dry_run(`bool`): add `--dry-run` to rsync command for testing
         verbose(`int`): add n `-v` to rsync command for increased debugging
@@ -255,10 +297,13 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
     
     
     # get the rsync binary path
-    if base_config['rsync_bin'] == 'None' or not base_config['rsync_bin']:
-        rsync_bin = None
-    else:
-        rsync_bin = Path(base_config['rsync_bin'])
+    
+    rsync_bin = base_config['rsync_bin']
+    
+#     if base_config['rsync_bin'] == 'None' or not base_config['rsync_bin']:
+#         rsync_bin = None
+#     else:
+#         rsync_bin = Path(base_config['rsync_bin'])
             
     if not rsync_bin:
         try:
@@ -275,8 +320,12 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
     
     # add the binary
     rsync_command.append(rsync_bin.as_posix())
-    # add the options from the ini file
-    rsync_command.append(base_config['rsync_options'])
+    # add the global options from the ini file
+#     rsync_command.append(base_config['rsync_options'])
+    rsync_command.append(base_config['global_rsync'])
+    
+    # and any job specific rsync options
+    rsync_command.append(job['rsync_options'])
     
     # add additional options from the args
     if dry_run:
@@ -285,10 +334,15 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
     if verbose:
         rsync_command.append('-'+'v'*verbose)
     
-    rsync_command.append(base_config['delete_options'])
+#     rsync_command.append(base_config['delete_options'])
     
+    ssh_command = ''
     if job['sshkey']:
-            ssh_command = f'ssh -o IdentitiesOnly=yes -i {job["sshkey"]}'
+#             ssh_command = f'ssh -o IdentitiesOnly=yes -i {job["sshkey"]}'
+#         ssh_command = f'ssh {ssh_opts["extrassh"]} -i {job["sshkey"]}'
+        ssh_command = f"ssh {job['ssh_options']} -i {job['sshkey']}"
+    elif not job['sshkey'] and job['ssh_options']:
+        ssh_command = f"ssh {job['ssh_options']}"
         
     if len(ssh_command) > 0:
         rsync_command.append(f'-e "{ssh_command}"')
@@ -335,7 +389,7 @@ def build_rsync_command(name, job, base_config, ssh_opts, tempdir, dry_run=False
         rsync_command.append(localpath)
         rsync_command.append(remotepath)
     
-#     set_trace()
+
     return shlex.split(' '.join(rsync_command))
 #     return rsync_command
     
@@ -444,12 +498,13 @@ def main():
     try:
         tempdir = tempfile.mkdtemp()
     except Exception as e:
-        do_exit(e, 2)            
+        do_exit(e, 2)
     
     # build configuration
     config_file = Path(CONFIG_PATH)/CONFIG_FILE
     config = get_config(config_file)
-    base_config, ssh_opts = parse_config(config)
+#     base_config, ssh_opts = parse_config(config)
+    base_config = parse_config(config)
 
     # get the list of jobs
     jobs = []
@@ -470,8 +525,10 @@ def main():
     # build rsync commands as lists using job configuration
     rsync_commands = {}
     for job in parsed_jobs:
-#         set_trace()
-        rsync_commands[job] = build_rsync_command(name=job, job=parsed_jobs[job], base_config=base_config, ssh_opts=ssh_opts, 
+
+#         rsync_commands[job] = build_rsync_command(name=job, job=parsed_jobs[job], base_config=base_config, ssh_opts=ssh_opts, 
+#                             tempdir=tempdir, dry_run=args.dry_run, verbose=verbose)
+        rsync_commands[job] = build_rsync_command(name=job, job=parsed_jobs[job], base_config=base_config, 
                             tempdir=tempdir, dry_run=args.dry_run, verbose=verbose)
 
     
@@ -511,22 +568,30 @@ def main():
         
         # get the timeout and kill values
         timeout = parsed_jobs[job]['timeout']
-        if timeout == 'None':
-            timeout = None
-        else:
+        if timeout:
             try:
-                 timeout = int(timeout)            
+                timeout = int(timeout)
             except TypeError:
                 do_exit(f'TypeError in {job}: timeout = {timeout} -- expected `integer` or `None`', 2)
         
-        kill = parsed_jobs[job]['kill']
+#         if timeout == 'None':
+#             timeout = None
+#         else:
+#             try:
+#                  timeout = int(timeout)            
+#             except TypeError:
+#                 do_exit(f'TypeError in {job}: timeout = {timeout} -- expected `integer` or `None`', 2)
         
-        if kill == 'False':
-            kill = False
-        elif kill == 'True':
-            kill = True
-        else:
-            do_exit(f'TypeError in {job}: kill = {kill} -- expected `True/False`', 2)
+        kill = parsed_jobs[job]['kill']
+        if kill not in (True, False):
+            do_exit(f'TypeError in {job}: kill = {kill} -- expected `boolean`', 2)
+        
+#         if kill == 'False':
+#             kill = False
+#         elif kill == 'True':
+#             kill = True
+#         else:
+#             do_exit(f'TypeError in {job}: kill = {kill} -- expected `True/False`', 2)
             
         # run the command
         process = subprocess.Popen(command, 
@@ -542,7 +607,7 @@ def main():
                 process.kill()
                 collected_output.append(f'timeout for job {job} expired, process was killed')
             else:
-                collected_output.append(f'timeout for job {job} expired, process was not killed; continuing')
+                collected_output.append(f'timeout for job {job} expired, process was not killed\njob continues, but monitoring has stopped')
         
         max_log = parsed_jobs[job]['max_log']
         
@@ -571,7 +636,7 @@ def main():
         
         log_output.close()
     
-#     set_trace()
+
 
     cleanup()
 
@@ -586,14 +651,15 @@ if __name__ == '__main__':
 
 
 
-# sys_args_initial = sys.argv
-# sys.argv.clear()
+
+sys_args_initial = sys.argv
+sys.argv.clear()
 
 
 
 
 
-# sys.argv.extend(['-v', '-d'])
+sys.argv.extend(['-v', '-d'])
 
 
 
@@ -605,7 +671,7 @@ if __name__ == '__main__':
 
 
 
-# from IPython.core.debugger import set_trace
+from IPython.core.debugger import set_trace
 
 
 
