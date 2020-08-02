@@ -27,7 +27,7 @@ from datetime import datetime
 
 
 # CONSTANTS
-VERSION = '3.0.09-beta'
+VERSION = '3.0.10-development.2020.08.02'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
@@ -42,9 +42,9 @@ EXPECTED_BASE_KEYS = {'rsync_bin': None,
 EXPECTED_JOB_KEYS = {'direction': 'local-remote',
                      'rsync_options': '',
                      'ssh_options': '',
+                     'sshkey': None,
                      'user': None,
                      'remotehost': None,
-                     'sshkey': None,
                      'localpath': None,
                      'remotepath': None,
                      'exclude': [],
@@ -66,96 +66,146 @@ CONFIG_PATH = Path(f'~/.config/{DEVEL_NAME}.{APP_NAME}').expanduser().absolute()
 
 def sample_config():
     return '''[%base_config]
-## `rsync_bin`: optional -- path to rsync bin; useful if not in $PATH
-rsync_bin = None
-## `rsync_options`: optional -- options to use for all rsync jobs
+##### Base Configuration #####
+## defines basic configuration ##
+
+# `rsync_bin`: OPTIONAL -- path to rsync binary
+# default: None -- automate_rsync searches $PATH for this 
+#rsync_bin = /path/to/binary
+
+# `global_rsync`: OPTIONAL -- add these options to all rsync jobs
+#global_rsync = -a -z -v
+
+##########################################################################
+# create at least one job following the examples below
+# white space and lines beginning with a `#` are ignored
+# paths with spaces must be escaped: 
+# `/my path/with spaces` becomes `/my\ path/with\ spaces`
+# 
+# To disable a job add a `#` to the job name. All example jobs below are
+# disabled.
+##########################################################################
+
+
+[#Job]
+##### Individual Job #####
+## defines configuration for each job ##
+# Remove the `#` in the job name to enable the job
+
+# `direction`: OPTIONAL -- direction to run sync 'local-remote' or 'remote-local'
+# local-remote -- SRC: localpath DEST: [USER@HOST]:remotepath (default if not specified)
+# remote-local -- SRC: [USER@HOST]:remotepath DEST: localpath
+#direction = local-remote
+
+# `rsync_options`: OPTIONAL -- additional rsync options local to this job
+# use this to specify any additional options that will apply to this job 
+# these options are appended to the global options -- be careful not to double up or
+# add conflicting options
+#rsync --delete-excluded --port 8080
+
+# `ssh_options`: OPTIONAL -- ssh options for this job in the ssh_config format 
+# see the ssh and ssh_config(5) man pages for details
+# ssh_options are added to the rsync options as: -e ssh "`ssh_options`"
+#ssh_options = -p 22 -o IdentitiesOnly=yes
+
+# `sshkey`: OPTIONAL -- specify a specific key for ssh
+# this is particularly useful in combination with restricted rsync (rrsync)
+# this option **MUST** be used with 'ssh_options = -o IdentitiesOnly=yes' otherwise
+# ssh will use the first matching key it finds. 
+#sshkey = /full/path/to/private/key-id_rsa
+
+# `user`: OPTIONAL -- username at remote host
+# this is specified as the 'USER@remotehost' portion of the rsync command
+#user = my_remote_username
+
+# `remotehost`: OPTIONAL -- ip address or hostname for remote host
+# this will be added as the user@REMOTEHOST portion of the rsync command
+#remotehost = 192.16.1.20
+#remotehost = my_backup.host.foo
+
+# `remotepath`: REQUIRED -- relative path to use as either SRC or DEST in rsync command
+# in most cases, this will be relative to the root file system: /home/my_user/my_data/dir
+# if using rrsync on the remote, this is relative to the root of the restricted fs: 
+# /host_imac_data or /host_acer_data
+#remotepath = /path/relative/to/root/of/remote/file/system
+# BE SURE TO ESCAPE SPACES! 
+#remotepath = /remote\ path/that\ has/spaces/
+
+# `localpath`: REQUIRED -- local path relative to the local file system
+#localpath = /path/to/my/datas
+# BE SURE TO ESCAPE SPACES! 
+#localpath = /path/with\ lots/of \spaces
+
+# `exclude`: OPTIONAL -- comma separated list of exclude patterns
+#exclude = .DS_Store, .git/*, core_dumps, /super/secret/data
+
+# `log_file`: OPTIONAL -- path to log file for this job
+# each job can have its own log file or the same file can be used for all jobs.
+# logging only occurs if `-v` is included in the global_rsync or rsync_options. 
+# Logging can also be triggered by specifying `-v` on the command line. 
+# Increase verbosity by adding multiple `-v`
+#log_file = /path/to/log/file.log
+
+# `max_log`: OPTIONAL -- (int) maximum size of log file in bytes (default: no limit)
+# (1048576 bytes == 1 megabyte)
+# after the job is completed and the max size is larger than the specified size, 
+# the log file will roll over to log_file.1 and a new log file will be generated
+# log files will always exceed the max size by at least one byte. If space is an issue,
+# set the max_log size small enough to accomodate potentially large logs.
+#max_log = 52428800
+
+# `timeout`: OPTIONAL -- (int) time in seconds before this job is optionally killed
+# (default: false)
+# if no timeout is set, all jobs will run concurrently
+# when the timeout expires, the job can be optionally killed; if it is not killed
+# any subsiquent jobs will be spawned and allowed to run concurently
+# if bandwidth is an issue it may be good to choose extra long timeouts and use the 
+# kill option.
+#timeout = 1200
+
+# `kill`: OPTIONAL -- (True/False) kill the job after the timeout has been reached (default)
+# this option is only useful if a timeout is set
+# if the timeout is exceeded and `kill` is false, the following job will be spawned and
+# run concurrently
+#kill = true
+
+[#local-sync]
+# sync files to a local exteral HDD
 rsync_options = -a -z
-## `delete_options`: optional -- deletion strategies to use (leave blank for none)
-delete_options = --delete-excluded
+direction = local-remote
+localpath = /Users/myuser/Documents/project\ files
+remotepath = /Volumes/Backup\ SSD/myuser/
+# produces: /usr/bin/rsync /Users/myuser/Documents/project\ files /Volumes/Backup\ SSD/myuser/
 
-[%ssh_opts]
-## extra options to pass to the ssh module
-## -e "ssh <extrassh>"
-## -o IdentitiesOnly=yes forces the use of one single key file
-## this prevents ssh from searching all availble keys
-extrassh = -o IdentitiesOnly=yes
+[#acer_laptop documents -> backup host]
+direction = local-remote
+rsync_options = --delete-after --port 8022
+ssh_options = -o IdentitiesOnly=yes
+user = mpython
+remotehost = backup.mydomain.com
+sshkey = /home/eidle/.ssh/com_mydomain_backup-id_rsa
+localpath = /home/edile/Documents
+# with rrsync adjusted root
+remotepath = /linux_laptop/
+exclude = no_backup, My\ Picutres
+log_file = ~/linux_laptop_rsync.log
+max_log = 2000000
+timeout = 1200
+kill = True
 
-
-## each 'job' must include at minimum the keys "localpath" and "remotepath"
-## other keys are optional (see the example below)
-## add an `=` to the beginning of a job to disable it
-## copy this TEMPLATE and remove the `#` to label each job
-[#TEMPLATE]
-## `direction`: optional -- not required (defaults to local-remote)
-direction = <direction of sync from: local-remote or from: remote-local>
-# direction = local-remote
-## `user`: optional -- not required for local syncs that do not use ssh
-user = <remote username>
-# user = jbuck
-
-## `remotehost`: optional -- not required for local syncs that do not use ssh
-remotehost = <remote ip or host name>
-# remotehost = backupserver.local
-
-## `sshkey`: optional -- not required for local syncs that do not use ssh
-sshkey = <optional: path to private ssh key>
-
-## `localpath`: required 
-localpath = <local path to sync from -- mind the trailing `/`>
-# localpath = /Users/jbuck/Documents <-- this will sync the dir
-# localpath = /Users/jbuck/Documents/ <-- this will sync the contents only
-## be sure to escape spaces in path names!
-# localpath = /Users/jbuck/path\ with/lots\ of/spaces
-
-## `remotepath`: required
-remotepath = <remote path to sync into -- mind the trailing `/`>
-
-## `exclude`: optional
-exclude = <comma separated list of patterns to exclude from sync>
-# exclude = .DS_Store, data_base, /Downloads, /Applications
-
-## `log_file`: optional
-log_file = <path to log file for this job - each job can have a different log file>
-# log_file = ~/jobs.log
-
-## `timeout`: optional
-timeout = <seconds before rsync job times out (default: 'None' (no timeout))>
-# timeout = 600
-# timeout = None
-
-## `kill`: optional
-kill = <True/False - kill the job after the timeout expires (default: False)>
-# kill = False
-
-## `max_log`: optional
-max_log = <max log size in bytes before rollover (1048576 bytes == 1 megabyte) (default: 0 no limit)>
-# max_log = 5242880
-
-
-## Local sync example (disabled)
-## sync the entire directory `foo` into `ColdStorage`
-[#Foo -> Bar Local Sync]
-localpath = /Users/jbuck/Documents/foo
-remotepath = /Volumes/ColdStorage/
-
-
-## Remote sync over ssh with specific ssh key (disabled)
-## this is particularly useful when using restricted rsync at the remote end
-[#iMac JBuck -> Backup Host]
-user = jbuck
-remotehost = backups.local
-sshkey = /Users/jbuck/.ssh/id_rsa-backups
-localpath = /Users/jbuck/Documents
-## Note: this is the path **relative** to the remote filesystem
-## Restricted rsync exposes only exposes a portion of the remote file system
-## that portion is treated as the "root" of the file system
-remotepath = /iMac.backups/
-exclude = .AppleDouble, .DS_Store, .git, .local, /Library, /Application*, /Music
-timeout = 600
-kill = False
-log_file = ~/documents_rsync.log
-# 5 mB = 52428800 bytes
-max_log = 52428800'''
+[#remote photos -> linux_laptop]
+direction = remote-local
+ssh_options = -o IdentitiesOnly=yes
+user = stockphotos
+remotehost = image-host.local
+sshkey = /home/edile/.ssh/local_image-host_id_rsa
+remotepath = /home/stockphotos/latest
+exclude = *.RAW, meta_data/*
+log_file = ~/remote_photos.log
+max_log 5000000
+timeout = 2000
+kill = True
+'''
 
 
 
@@ -646,6 +696,8 @@ def main():
 
 if __name__ == '__main__':
     job = main()
+
+
 
 
 
