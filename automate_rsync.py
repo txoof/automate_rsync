@@ -652,14 +652,9 @@ if __name__ == '__main__':
 
 
 
-sys_args_initial = sys.argv
-sys.argv.clear()
-
-
-
-
-
-sys.argv.extend(['-v', '-d'])
+# sys_args_initial = sys.argv
+# sys.argv.clear()
+# sys.argv.extend(['-v', '-d'])
 
 
 
@@ -671,7 +666,7 @@ sys.argv.extend(['-v', '-d'])
 
 
 
-from IPython.core.debugger import set_trace
+# from IPython.core.debugger import set_trace
 
 
 
