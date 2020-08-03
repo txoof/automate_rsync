@@ -202,7 +202,7 @@ sshkey = /home/edile/.ssh/local_image-host_id_rsa
 remotepath = /home/stockphotos/latest
 exclude = *.RAW, meta_data/*
 log_file = ~/remote_photos.log
-max_log 5000000
+max_log = 5000000
 timeout = 2000
 kill = True
 '''
