@@ -199,7 +199,8 @@ ssh_options = -o IdentitiesOnly=yes
 user = stockphotos
 remotehost = image-host.local
 sshkey = /home/edile/.ssh/local_image-host_id_rsa
-remotepath = /home/stockphotos/latest
+remotepath = /home/stockphotos/latest/*
+localpath = /home/edile/temp/stock_photos
 exclude = *.RAW, meta_data/*
 log_file = ~/remote_photos.log
 max_log = 5000000
