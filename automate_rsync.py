@@ -27,7 +27,7 @@ from datetime import datetime
 
 
 # CONSTANTS
-VERSION = '3.0.10-development.2020.08.02'
+VERSION = '3.0.10'
 APP_NAME = 'automate_rsync'
 DEVEL_NAME = 'com.txoof'
 CONFIG_FILE = f'{APP_NAME}.ini'
